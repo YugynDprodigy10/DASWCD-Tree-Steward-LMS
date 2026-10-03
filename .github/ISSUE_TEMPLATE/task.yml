@@ -1,0 +1,67 @@
+name: "Development Task"
+description: "Track technical work with a clear Definition of Done."
+title: "[Task]: "
+body:
+  - type: "markdown"
+    attributes:
+      value: "Describe one focused item. Do not include passwords, tokens, or real student data. A triager will confirm the assignee, labels, and board status."
+  - type: "textarea"
+    id: "description"
+    attributes:
+      label: "Task description"
+    validations:
+      required: true
+  - type: "textarea"
+    id: "reason"
+    attributes:
+      label: "Why this task is needed"
+    validations:
+      required: true
+  - type: "textarea"
+    id: "criteria"
+    attributes:
+      label: "Acceptance criteria / Definition of Done"
+      description: "Use observable, testable outcomes. The assignee and reviewer agree on these before work starts."
+      placeholder: "- [ ] Expected behavior can be verified\n- [ ] Relevant checks pass"
+    validations:
+      required: true
+  - type: "dropdown"
+    id: "area"
+    attributes:
+      label: "Area/component"
+      options:
+        - "Frontend"
+        - "Backend"
+        - "Authentication"
+        - "Database"
+        - "Quiz / Assessment"
+        - "LMS Modules"
+        - "Communication"
+        - "Testing / QA"
+        - "DevOps / CI"
+        - "Documentation"
+    validations:
+      required: true
+  - type: "textarea"
+    id: "dependencies"
+    attributes:
+      label: "Dependencies"
+    validations:
+      required: false
+  - type: "dropdown"
+    id: "priority"
+    attributes:
+      label: "Priority"
+      description: "Triager applies the matching priority label after submission."
+      options:
+        - "High"
+        - "Medium"
+        - "Low"
+    validations:
+      required: true
+  - type: "textarea"
+    id: "related"
+    attributes:
+      label: "Related issue or PR"
+    validations:
+      required: false

@@ -1,0 +1,76 @@
+name: "Feature Request"
+description: "Propose a feature for the LMS."
+title: "[Feature]: "
+labels:
+  - "feature"
+body:
+  - type: "markdown"
+    attributes:
+      value: "Describe one focused item. Do not include passwords, tokens, or real student data. A triager will confirm the assignee, labels, and board status."
+  - type: "input"
+    id: "feature-title"
+    attributes:
+      label: "Feature title"
+    validations:
+      required: true
+  - type: "textarea"
+    id: "story"
+    attributes:
+      label: "User story"
+      placeholder: "As a [type of user],\nI want [goal],\nso that [reason]."
+    validations:
+      required: true
+  - type: "textarea"
+    id: "description"
+    attributes:
+      label: "Description"
+    validations:
+      required: true
+  - type: "textarea"
+    id: "criteria"
+    attributes:
+      label: "Acceptance criteria"
+      description: "Use observable, testable outcomes. The assignee and reviewer agree on these before work starts."
+      placeholder: "- [ ] Expected behavior can be verified\n- [ ] Relevant checks pass"
+    validations:
+      required: true
+  - type: "dropdown"
+    id: "area"
+    attributes:
+      label: "Area/component"
+      options:
+        - "Frontend"
+        - "Backend"
+        - "Authentication"
+        - "Database"
+        - "Quiz / Assessment"
+        - "LMS Modules"
+        - "Communication"
+        - "Testing / QA"
+        - "DevOps / CI"
+        - "Documentation"
+    validations:
+      required: true
+  - type: "dropdown"
+    id: "priority"
+    attributes:
+      label: "Priority"
+      description: "Triager applies the matching priority label after submission."
+      options:
+        - "High"
+        - "Medium"
+        - "Low"
+    validations:
+      required: true
+  - type: "textarea"
+    id: "dependencies"
+    attributes:
+      label: "Dependencies/blockers"
+    validations:
+      required: false
+  - type: "textarea"
+    id: "screenshots"
+    attributes:
+      label: "Screenshots or mockups"
+    validations:
+      required: false
