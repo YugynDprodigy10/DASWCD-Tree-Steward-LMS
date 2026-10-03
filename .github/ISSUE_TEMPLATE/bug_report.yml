@@ -1,0 +1,89 @@
+name: "Bug Report"
+description: "Report a reproducible problem."
+title: "[Bug]: "
+labels:
+  - "bug"
+body:
+  - type: "markdown"
+    attributes:
+      value: "Describe one focused item. Do not include passwords, tokens, or real student data. A triager will confirm the assignee, labels, and board status."
+  - type: "textarea"
+    id: "description"
+    attributes:
+      label: "Bug description"
+    validations:
+      required: true
+  - type: "textarea"
+    id: "steps"
+    attributes:
+      label: "Steps to reproduce"
+      placeholder: "1. Open ...\n2. Select ...\n3. Observe ..."
+    validations:
+      required: true
+  - type: "textarea"
+    id: "expected"
+    attributes:
+      label: "Expected behavior"
+    validations:
+      required: true
+  - type: "textarea"
+    id: "actual"
+    attributes:
+      label: "Actual behavior"
+    validations:
+      required: true
+  - type: "textarea"
+    id: "criteria"
+    attributes:
+      label: "Acceptance criteria for the fix"
+      description: "Use observable, testable outcomes. The assignee and reviewer agree on these before work starts."
+      placeholder: "- [ ] Expected behavior can be verified\n- [ ] Relevant checks pass"
+    validations:
+      required: true
+  - type: "dropdown"
+    id: "area"
+    attributes:
+      label: "Area/component"
+      options:
+        - "Frontend"
+        - "Backend"
+        - "Authentication"
+        - "Database"
+        - "Quiz / Assessment"
+        - "LMS Modules"
+        - "Communication"
+        - "Testing / QA"
+        - "DevOps / CI"
+        - "Documentation"
+    validations:
+      required: true
+  - type: "textarea"
+    id: "environment"
+    attributes:
+      label: "Browser/environment"
+      description: "Include browser/version, operating system, device, local or preview URL, and affected role."
+    validations:
+      required: true
+  - type: "textarea"
+    id: "evidence"
+    attributes:
+      label: "Screenshots/logs"
+    validations:
+      required: false
+  - type: "dropdown"
+    id: "priority"
+    attributes:
+      label: "Priority"
+      description: "Triager applies the matching priority label after submission."
+      options:
+        - "High"
+        - "Medium"
+        - "Low"
+    validations:
+      required: true
+  - type: "textarea"
+    id: "related"
+    attributes:
+      label: "Related issue or PR"
+    validations:
+      required: false

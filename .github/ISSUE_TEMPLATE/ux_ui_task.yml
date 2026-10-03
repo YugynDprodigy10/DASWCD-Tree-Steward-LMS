@@ -1,0 +1,77 @@
+name: "UX / UI Task"
+description: "Improve a screen, interaction, or accessible user experience."
+title: "[UX]: "
+labels:
+  - "ui-ux"
+body:
+  - type: "markdown"
+    attributes:
+      value: "Describe one focused item. Do not include passwords, tokens, or real student data. A triager will confirm the assignee, labels, and board status."
+  - type: "dropdown"
+    id: "role"
+    attributes:
+      label: "User role"
+      options:
+        - "Student"
+        - "Instructor"
+        - "Admin"
+        - "Multiple roles"
+    validations:
+      required: true
+  - type: "input"
+    id: "screen"
+    attributes:
+      label: "Screen/workflow affected"
+    validations:
+      required: true
+  - type: "textarea"
+    id: "problem"
+    attributes:
+      label: "Problem being solved"
+    validations:
+      required: true
+  - type: "textarea"
+    id: "change"
+    attributes:
+      label: "Proposed change"
+    validations:
+      required: true
+  - type: "textarea"
+    id: "criteria"
+    attributes:
+      label: "Acceptance criteria"
+      description: "Use observable, testable outcomes. The assignee and reviewer agree on these before work starts."
+      placeholder: "- [ ] Expected behavior can be verified\n- [ ] Relevant checks pass"
+    validations:
+      required: true
+  - type: "textarea"
+    id: "responsive"
+    attributes:
+      label: "Responsive-design considerations"
+      description: "Describe phone and desktop behavior, touch targets, and overflow."
+    validations:
+      required: true
+  - type: "textarea"
+    id: "accessibility"
+    attributes:
+      label: "Accessibility considerations"
+      description: "Consider keyboard use, focus, labels, contrast, and assistive technology."
+    validations:
+      required: true
+  - type: "textarea"
+    id: "screenshots"
+    attributes:
+      label: "Screenshots / wireframes"
+    validations:
+      required: false
+  - type: "dropdown"
+    id: "priority"
+    attributes:
+      label: "Priority"
+      description: "Triager applies the matching priority label after submission."
+      options:
+        - "High"
+        - "Medium"
+        - "Low"
+    validations:
+      required: true
