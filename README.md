@@ -1,0 +1,107 @@
+# Steward Tree LMS
+
+Steward Tree is a learning management system for the Doña Ana Soil and Water Conservation District (DASWCD). We are building a simple, mobile-friendly learning space for its recurring 12-week Tree Steward program, including volunteers with limited technical experience.
+
+## What we are building
+
+- **Students:** read weekly modules, access learning materials, submit assignments, take quizzes, view grades, and communicate with their class.
+- **Instructors:** view the course, edit their assigned modules, add text and media, build quizzes with draft/publish steps, and review student results.
+- **Admins:** manage accounts, roles, module assignments, and course content across program offerings.
+
+The backend must enforce permissions; hiding a button in React is not access control.
+
+## Current status
+
+The React prototype includes a student dashboard, 12 sample modules, lesson navigation, completion filters, and progress tracking. Content is illustrative, and progress resets on refresh. Authentication, real course content, assignments, grading, instructor/admin interfaces, and messaging are planned. An Express API and PostgreSQL development scripts are in progress; the student UI is not connected to them yet.
+
+[View the shared frontend preview](https://elegant-fox-d4ee0f.netlify.app). This is currently a manual deployment and may lag behind this repository.
+
+## Install prerequisites
+
+- **Node.js 24 LTS**, including npm: [official installer](https://nodejs.org/en/download).
+- **Git:** [official downloads](https://git-scm.com/downloads).
+- A browser and an editor such as VS Code.
+- Access to this private repository: accept the owner's GitHub invitation first.
+
+On Windows, you can install Node from PowerShell:
+
+```powershell
+winget install --id OpenJS.NodeJS.LTS --exact --source winget
+```
+
+Restart your terminal/editor afterward, then check:
+
+```sh
+node --version
+npm --version
+git --version
+```
+
+Use Node 24 for consistency with CI. If Windows still finds an old version, run `where.exe node` and `where.exe npm` to find competing installations. If you use a Node version manager, select Node 24 through that manager.
+
+## Run the frontend
+
+For a new checkout:
+
+```sh
+git clone https://github.com/MarioSaenz356/DASWCD-Tree-Steward-LMS.git
+cd DASWCD-Tree-Steward-LMS/frontend
+npm ci
+npm run dev
+```
+
+**React is installed by `npm ci`**, together with React DOM, Vite, and the other dependencies declared in `frontend/package.json`. Do not install React globally or run `create-vite` inside this existing repository.
+
+If you already have the repository, open a terminal in its root and run:
+
+```sh
+cd frontend
+npm ci
+npm run dev
+```
+
+Open the local URL printed by Vite (usually `http://localhost:5173`). Leave the terminal running; edits update the page automatically. Press Ctrl+C to stop it. Docker, PostgreSQL, backend services, and environment variables are **not required for the current sample frontend**.
+
+## Check and build
+
+Run from `frontend`:
+
+```sh
+npm run lint
+npm run build
+npm run preview
+```
+
+- `lint`: checks JavaScript and React code with ESLint.
+- `build`: creates the deployable site in `frontend/dist`.
+- `preview`: serves the production build locally; open its printed URL.
+
+Use `npm ci` after cloning or pulling lockfile changes. Use `npm install <package>` only when intentionally adding a dependency, and commit both package files. The existing `npm test` scripts are placeholders that fail; automated unit and browser tests have not been implemented yet.
+
+## Repository layout
+
+```text
+.github/                CI workflow and pull request template
+backend/                Express API prototype
+frontend/
+  src/                  React UI and existing Node database utilities
+  public/               Static assets
+  databaseInstructions/ SQL migrations and query examples
+  docker-compose.yml    Local database/migration setup
+  package.json          Frontend commands and dependencies
+docs/                   GitHub administration guide
+```
+
+The database utilities currently live under `frontend/src`; they run in Node and must never be imported into browser components. Moving them into the backend is a follow-up task to coordinate with the database owner.
+
+## Backend and database
+
+See [frontend setup and database commands](frontend/README.md) for the existing Docker migration workflow. The backend's `/api/health` endpoint queries PostgreSQL, so it needs a running database and matching connection settings. Full-stack setup is separate from the frontend quick start above.
+
+## Collaboration and CI
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before starting a branch. Open a pull request into `main`, use the provided template, and request a teammate's review.
+
+The **Frontend CI** workflow runs dependency installation, ESLint, and the production build for every PR targeting `main` and every push to `main`. It checks the frontend and its Node utilities; it does not yet test the backend or database, and it does not deploy to Netlify.
+
+Repository admins should follow [GitHub setup](docs/github-setup.md) to enable branch protection. Adding a workflow file alone does not prevent direct pushes or failed merges.

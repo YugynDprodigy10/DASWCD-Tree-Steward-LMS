@@ -1,29 +1,27 @@
-## Database Migration
+# Frontend development
 
-With Docker Desktop running, apply the database migration without installing PostgreSQL or Node dependencies on the host.
+See the [project README](../README.md) for the project scope, Node installation, and complete React setup instructions.
 
-From the repository root:
+From this directory, with Node 24 installed:
 
-```powershell
+```sh
+npm ci
+npm run dev
+```
+
+`npm ci` installs React and the other dependencies. Run `npm run lint` and `npm run build` before requesting a review. The sample UI runs without Docker or a database.
+
+## Database migration (optional; database work only)
+
+The existing migration utilities are Node scripts, not React code. Do not import them into browser components.
+
+With Docker Desktop running, apply the database migration without installing PostgreSQL or Node dependencies on the host. From the **repository root**:
+
+```sh
 docker compose -f frontend/docker-compose.yml run --build --rm migrate
 docker compose -f frontend/docker-compose.yml run --build --rm migrate npm run query
 ```
 
-The first command applies `create_users.sql`; the second runs `queryTester.js` against the same Docker database. The npm scripts are defined under `frontend`, so `npm run migrate` by itself does not work from the repository root.
+The first command applies `create_users.sql`; the second runs the query examples against the same Docker database. Coordinate migration changes with the database owner. Development database credentials are for local use only.
 
-# React + Vite
-
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
-
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+The npm migration scripts are defined in `frontend/package.json`; running `npm run migrate` from the repository root will not work.
