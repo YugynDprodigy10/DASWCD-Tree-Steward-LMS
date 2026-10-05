@@ -12,7 +12,7 @@ The backend must enforce permissions; hiding a button in React is not access con
 
 ## Current status
 
-The React prototype includes a student dashboard, 12 sample modules, lesson navigation, completion filters, and progress tracking. Content is illustrative, and progress resets on refresh. Authentication, real course content, assignments, grading, instructor/admin interfaces, and messaging are planned. An Express API and PostgreSQL development scripts are in progress; the student UI is not connected to them yet.
+The React prototype includes a matching login design, student and instructor demo views, a responsive card layout, and navigation across 12 sample modules. Instructors can add/edit cards in their sample assigned module (Week 2), keep cards as drafts, and preview the student view on desktop or mobile. Students see published cards without instructor controls and can mark announcements as read. All sample changes reset on refresh or sign out. Authentication, persistent course content, quiz authoring/attempts, submissions, enrollment, grades, admin tools, and messaging are not connected. The Express API and PostgreSQL development scripts remain separate from the UI.
 
 [View the shared frontend preview](https://elegant-fox-d4ee0f.netlify.app). This is currently a manual deployment and may lag behind this repository.
 
@@ -61,6 +61,15 @@ npm run dev
 ```
 
 Open the local URL printed by Vite (usually `http://localhost:5173`). Leave the terminal running; edits update the page automatically. Press Ctrl+C to stop it. Docker, PostgreSQL, backend services, and environment variables are **not required for the current sample frontend**.
+
+## Try the interface
+
+Choose **Student demo** or **Instructor demo** on the login screen; no credentials are needed. The sign-in form is a design preview and does not authenticate.
+
+- In the instructor demo, add a block in Week 2. Leave **Visible in student demo** unchecked to create a draft.
+- Select **Preview as student** to confirm that drafts and editing controls disappear. Use **Exit preview** to return.
+- Use the module selector or previous/next buttons to explore the course. Other modules are read-only in the instructor demo.
+- On a phone, navigation moves to the bottom; student preview remains available above the module heading.
 
 ## Check and build
 
