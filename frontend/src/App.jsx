@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import Modal from "./components/Modal";
 import { initialBlocks, modules } from "./data/course";
 import "./App.css";
+import ApiStatus from "./components/ApiStatus";
 
 function Brand() {
   return (
@@ -126,6 +127,7 @@ function Login({ onDemo }) {
       </main>
       <footer className="login-footer">
         Steward Tree · Learning for a thriving desert landscape.
+        <ApiStatus />
       </footer>
     </div>
   );
