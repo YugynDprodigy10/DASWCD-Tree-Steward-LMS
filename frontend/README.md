@@ -22,6 +22,6 @@ docker compose -f frontend/docker-compose.yml run --build --rm migrate
 docker compose -f frontend/docker-compose.yml run --build --rm migrate npm run query
 ```
 
-The first command applies `create_users.sql`; the second runs the query examples against the same Docker database. Coordinate migration changes with the database owner. Development database credentials are for local use only.
+The first command applies `create_database.sql`; the second runs the query examples against the same Docker database. Coordinate migration changes with the database owner. Development database credentials are for local use only.
 
 The npm migration scripts are defined in `frontend/package.json`; running `npm run migrate` from the repository root will not work.
