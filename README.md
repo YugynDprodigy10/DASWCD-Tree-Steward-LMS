@@ -52,24 +52,30 @@ npm run dev
 
 **React is installed by `npm ci`**, together with React DOM, Vite, and the other dependencies declared in `frontend/package.json`. Do not install React globally or run `create-vite` inside this existing repository.
 
-If you already have the repository, open a terminal in its root and run:
+If you already have the repository, the frontend runs on its own:
+
+```sh
+cd frontend
+npm ci
+npm run dev
+```
+
+Open the local URL printed by Vite (usually `http://localhost:5173`). Leave the terminal running; edits update the page automatically. Press Ctrl+C to stop it. The sample frontend works without Docker or the backend.
+
+### Run the backend (optional)
+
+To connect the frontend to the API and database, start Docker Desktop, then open a **second terminal** in the repository root and run:
 
 ```sh
 cd backend
 npm ci
 npm run migrate
 npm run dev
-
-cd ..
-
-cd frontend
-npm ci
-npm run dev
 ```
 
-Ensure the API health is working by checking the API health (usually 'http://localhost:3000/api/health'). The local database time should be shown. 
+Check `http://localhost:3000/api/health`; it should return the database's current time. With both terminals running, the login page footer shows the same database time, which confirms the frontend, backend, and database are connected.
 
-Open the local URL printed by Vite (usually `http://localhost:5173`). Leave the terminal running; edits update the page automatically. Press Ctrl+C to stop it. Docker, PostgreSQL, backend services, and environment variables are **not required for the current sample frontend**. However, to ensure that the beckend is connected properly, ensure that the backend commands are ran and the API health check displays the database time. This will be checked by seeing the database time rendered in the footline of the login page.
+If you ran the database before it moved to `backend/`, stop the old container once with `docker stop frontend-database-1`. Otherwise it keeps port 5432 and the backend connects to the old database.
 
 ## Try the interface
 
