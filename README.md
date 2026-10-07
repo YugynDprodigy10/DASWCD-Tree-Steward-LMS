@@ -55,12 +55,21 @@ npm run dev
 If you already have the repository, open a terminal in its root and run:
 
 ```sh
+cd backend
+npm ci
+npm run migrate
+npm run dev
+
+cd ..
+
 cd frontend
 npm ci
 npm run dev
 ```
 
-Open the local URL printed by Vite (usually `http://localhost:5173`). Leave the terminal running; edits update the page automatically. Press Ctrl+C to stop it. Docker, PostgreSQL, backend services, and environment variables are **not required for the current sample frontend**.
+Ensure the API health is working by checking the API health (usually 'http://localhost:3000/api/health'). The local database time should be shown. 
+
+Open the local URL printed by Vite (usually `http://localhost:5173`). Leave the terminal running; edits update the page automatically. Press Ctrl+C to stop it. Docker, PostgreSQL, backend services, and environment variables are **not required for the current sample frontend**. However, to ensure that the beckend is connected properly, ensure that the backend commands are ran and the API health check displays the database time. This will be checked by seeing the database time rendered in the footline of the login page.
 
 ## Try the interface
 
