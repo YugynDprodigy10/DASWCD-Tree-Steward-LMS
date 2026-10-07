@@ -8,8 +8,6 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "migrate": "node src/migrate.js",
-    "query": "node src/queryTester.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
