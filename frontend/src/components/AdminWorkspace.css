@@ -1,0 +1,325 @@
+.demo-buttons {
+  flex-wrap: wrap;
+}
+.demo-buttons button {
+  flex: 1 1 130px;
+}
+.admin-shell .page-heading {
+  align-items: flex-start;
+}
+.admin-shell .page-heading > .primary {
+  flex-shrink: 0;
+  margin-top: 8px;
+}
+.admin-demo-note {
+  font-size: 12px;
+  color: #596b54;
+  border-left: 3px solid #94ab79;
+  padding: 8px 14px;
+  margin-bottom: 28px;
+}
+.admin-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+.stat-card {
+  background: #fff;
+  border: 1px solid #dfe3d7;
+  border-radius: 10px;
+  padding: 20px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.stat-card:hover {
+  border-color: #789164;
+  background: #f5f8ef;
+}
+.stat-card > span {
+  font-size: 12px;
+  color: #56684c;
+}
+.stat-card strong {
+  font-size: 38px;
+  font-weight: 500;
+  line-height: 1;
+}
+.stat-card small {
+  font-size: 10px;
+  color: #657655;
+}
+.admin-panel {
+  padding: 25px;
+  border: 1px solid #dfe3d7;
+  border-radius: 10px;
+  background: white;
+  margin-bottom: 18px;
+}
+.admin-panel h2 {
+  font-size: 20px;
+  margin: 10px 0;
+}
+.admin-panel p {
+  font-size: 14px;
+  color: #627359;
+}
+.admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.activity-list {
+  padding-left: 20px;
+  font-size: 13px;
+  color: #526647;
+}
+.activity-list li {
+  padding: 10px 0;
+  border-bottom: 1px solid #e5e9df;
+}
+.people-filters {
+  display: flex;
+  gap: 15px;
+  align-items: flex-end;
+}
+.people-filters > div:first-child {
+  flex: 1;
+}
+.people-filters > div:last-child {
+  width: 180px;
+}
+.helper {
+  color: #63745a;
+  font-size: 12px;
+}
+.people-grid {
+  display: grid;
+  gap: 16px;
+}
+.person-card {
+  border: 1px solid #dfe3d7;
+  background: #fff;
+  padding: 22px;
+  border-radius: 10px;
+}
+.person-heading {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.person-heading > div:nth-child(2) {
+  min-width: 0;
+  flex: 1;
+}
+.person-heading h2 {
+  font-size: 18px;
+  margin: 0 0 4px;
+  overflow-wrap: anywhere;
+}
+.person-heading p {
+  font-size: 13px;
+  margin: 0;
+  color: #627359;
+  overflow-wrap: anywhere;
+}
+.avatar {
+  background: #eaf0e0;
+  color: #48603c;
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+}
+.person-card > p {
+  margin: 14px 0 4px;
+}
+.person-actions {
+  display: flex;
+  gap: 22px;
+  border-top: 1px solid #e5e9df;
+  margin-top: 15px;
+  padding-top: 5px;
+  flex-wrap: wrap;
+}
+.status-tag {
+  display: inline-block;
+  font-size: 10px;
+  border: 1px solid #d6decd;
+  background: #f1f4eb;
+  color: #526648;
+  border-radius: 20px;
+  padding: 3px 10px;
+}
+.status-tag.pending,
+.status-tag.expired {
+  background: #faf1df;
+  color: #7d6027;
+  border-color: #ebd9b5;
+}
+.status-tag.inactive,
+.status-tag.revoked {
+  background: #f2f1ef;
+  color: #68645e;
+  border-color: #ddd9d2;
+}
+.invite-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+}
+.invite-row > div {
+  min-width: 0;
+}
+.invite-row h2,
+.invite-row p {
+  overflow-wrap: anywhere;
+}
+.invite-row p {
+  margin-bottom: 5px;
+}
+.invite-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.module-choices {
+  border: 1px solid #dce3d2;
+  padding: 16px;
+  border-radius: 8px;
+  margin: 20px 0;
+  max-height: 300px;
+  overflow: auto;
+}
+.module-choices legend {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 0 6px;
+}
+.module-choices .checkbox-label {
+  font-weight: 400;
+  margin: 0;
+  padding: 6px 0;
+}
+.module-choices input {
+  flex-shrink: 0;
+}
+.admin-module-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.admin-module-list .admin-panel {
+  margin: 0;
+}
+.student-progress {
+  padding: 18px 0;
+  border-top: 1px solid #e1e6d9;
+}
+.student-progress > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  margin-bottom: 10px;
+}
+.student-progress progress {
+  width: 100%;
+  height: 12px;
+  accent-color: #527442;
+}
+.recovery-page {
+  max-width: 520px;
+  padding: 45px 22px;
+  margin: auto;
+  min-height: 100vh;
+}
+.recovery-card {
+  margin-top: 20px;
+}
+.recovery-card h1 {
+  font-family: Georgia, serif;
+  font-weight: 400;
+  font-size: 32px;
+  margin-top: 16px;
+}
+.recovery-card p {
+  font-size: 14px;
+}
+.recovery-card .helper {
+  font-size: 12px;
+}
+.recovery-note {
+  color: #63745a;
+  font-size: 12px;
+  text-align: center;
+  margin-top: 22px;
+}
+@media (max-width: 1100px) {
+  .admin-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .admin-shell .page-heading {
+    flex-wrap: wrap;
+  }
+  .invite-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+@media (max-width: 700px) {
+  .admin-shell .sidebar nav {
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+  .admin-shell .nav-item {
+    font-size: 9px;
+  }
+  .admin-panel,
+  .person-card {
+    padding: 18px;
+  }
+  .admin-module-list {
+    grid-template-columns: 1fr;
+  }
+  .people-filters {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+  }
+  .people-filters > div:last-child {
+    width: auto;
+  }
+  .person-heading {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .person-heading > .status-tag {
+    margin-left: 54px;
+  }
+  .person-actions {
+    gap: 6px 18px;
+  }
+  .student-progress > div {
+    flex-direction: column;
+    gap: 4px;
+  }
+  .stat-card {
+    padding: 15px;
+  }
+  .stat-card strong {
+    font-size: 30px;
+  }
+  .admin-shell .page-heading h1 {
+    font-size: 26px;
+  }
+  .admin-demo-note {
+    font-size: 11px;
+  }
+}

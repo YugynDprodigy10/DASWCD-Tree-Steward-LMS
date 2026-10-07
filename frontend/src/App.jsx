@@ -3,6 +3,8 @@ import Modal from "./components/Modal";
 import { initialBlocks, modules } from "./data/course";
 import "./App.css";
 import ApiStatus from "./components/ApiStatus";
+import AdminWorkspace from "./components/AdminWorkspace";
+import AccountRecovery from "./components/AccountRecovery";
 
 function Brand() {
   return (
@@ -24,8 +26,10 @@ function Brand() {
 }
 
 function Login({ onDemo }) {
+  const [recovery, setRecovery] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState("");
+  if (recovery) return <AccountRecovery onBack={() => setRecovery(false)} />;
   return (
     <div className="login-page">
       <header>
@@ -96,6 +100,13 @@ function Login({ onDemo }) {
             <p className="login-help">
               Accounts are provided by the program administrator.
             </p>
+            <button
+              className="text-button"
+              type="button"
+              onClick={() => setRecovery(true)}
+            >
+              Forgot password?
+            </button>
             <button className="primary full" type="submit">
               Sign in <span aria-hidden="true">→</span>
             </button>
@@ -120,6 +131,9 @@ function Login({ onDemo }) {
                 onClick={() => onDemo("instructor")}
               >
                 Instructor demo
+              </button>
+              <button className="secondary" onClick={() => onDemo("admin")}>
+                Administrator demo
               </button>
             </div>
           </div>
@@ -275,7 +289,11 @@ export default function App() {
       editor.block?.id
         ? previous.map((item) =>
             item.id === editor.block.id
-              ? { ...item, ...values, detail: item.type === values.type ? item.detail : undefined }
+              ? {
+                  ...item,
+                  ...values,
+                  detail: item.type === values.type ? item.detail : undefined,
+                }
               : item,
           )
         : [...previous, { ...values, id: crypto.randomUUID(), moduleId }],
@@ -284,6 +302,8 @@ export default function App() {
     setMessage("Content block saved for this demo session.");
   }
   if (!role) return <Login onDemo={enterDemo} />;
+  if (role === "admin")
+    return <AdminWorkspace brand={<Brand />} onExit={leaveDemo} />;
   const navItems = isInstructor
     ? [
         ["Home", "⌂"],
