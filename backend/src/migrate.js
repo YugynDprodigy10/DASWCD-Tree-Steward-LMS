@@ -16,7 +16,7 @@ async function runMigration() { // Applies the database migration files.
     const migrationSql = await readFile(migrationPath, "utf8");
 
     await client.query(migrationSql);
-    console.log("create_users.sql applied successfully.");
+    console.log("create_database.sql applied successfully.");
     const result = await client.query("SELECT current_user, current_database();");
     console.log(result.rows);
   });
