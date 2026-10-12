@@ -77,6 +77,8 @@ Check `http://localhost:3000/api/health`; it should return the database's curren
 
 The Docker database is published on host port `5434` by default because a local PostgreSQL service may already use `5432`. PostgreSQL still listens on `5432` inside the container. The local API uses `DB_HOST_PORT` (or `DB_PORT`) to connect to the published host port. If you need another host port, set `DB_HOST_PORT` before running Docker Compose; the migration script automatically finds an available host port when it starts the database.
 
+To create the test users, run `npm run query` in `backend`. Then sign in with `teststudent1@example.com`, `testteacher1@example.com`, or `testadmin1@example.com`, all with the password `Test Password 1`.
+
 ## Try the interface
 
 Choose **Student demo** or **Instructor demo** on the login screen; no credentials are needed. The sign-in form is a design preview and does not authenticate.
