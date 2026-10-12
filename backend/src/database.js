@@ -92,11 +92,11 @@ async function connectWithRetry(host, port) { // Retries while PostgreSQL is sta
 
 async function withDatabase(callback) {
   let host = process.env.DB_HOST;
-  let hostPort = Number(process.env.DB_PORT ?? 5432);
+  let hostPort = Number(process.env.DB_PORT ?? 5434);
 
   if (!host) {
     const existingPort = getRunningDatabasePort();
-    hostPort = existingPort ?? await findAvailablePort(5432);
+    hostPort = existingPort ?? await findAvailablePort(5434);
     process.env.DB_HOST_PORT = String(hostPort);
     host = "127.0.0.1";
 

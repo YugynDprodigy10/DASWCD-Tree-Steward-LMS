@@ -1,16 +1,10 @@
 import express from "express";
-import pg from "pg";
-
-const pool = new pg.Pool({
-  host: process.env.DB_HOST ?? "localhost",
-  port: Number(process.env.DB_PORT ?? 5432),
-  user: process.env.POSTGRES_USER ?? "appuser",
-  password: process.env.POSTGRES_PASSWORD ?? "apppassword",
-  database: process.env.POSTGRES_DB ?? "database",
-});
+import pool from "./db/pool.js";
+import authRouter from "./routes/auth.js";
 
 const app = express();
 app.use(express.json());
+app.use("/api/auth", authRouter); //allows the frontend to be handled by auth.js in the backend.
 
 app.get("/api/health", async (req, res) => {
   const result = await pool.query("SELECT NOW()");
