@@ -25,10 +25,40 @@ function Brand() {
   );
 }
 
-function Login({ onDemo }) {
-  const [recovery, setRecovery] = useState(false);
+function Login({ onDemo, onLogin }) {
+  const [recovery, setRecovery] = useState(false); //onLogin tells the app that the user has successfully logged in and provides the user data to the app. 
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  //all of these const values track your email and password input  
+
+  async function submitLogin(event) { //When there's an email and password, this function sends a request to the backend with the email and password. If the response is successful, it calls onLogin with the user data. If there's an error, it sets the message state to display the error message.
+    event.preventDefault();
+    setMessage("");
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Unable to sign in.");
+      }
+
+      onLogin(result.user);
+    } catch (error) {
+      setMessage(error.message || "Unable to sign in.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   if (recovery) return <AccountRecovery onBack={() => setRecovery(false)} />;
   return (
     <div className="login-page">
@@ -64,20 +94,15 @@ function Login({ onDemo }) {
           <span className="eyebrow">YOUR LEARNING SPACE</span>
           <h2>Welcome back.</h2>
           <p className="muted">Sign in to continue your stewardship journey.</p>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              setMessage(
-                "Sign-in is not connected yet. Use a sample view below; do not enter real account credentials.",
-              );
-            }}
-          >
+          <form onSubmit={submitLogin}>
             <label htmlFor="email">Email address</label>
             <input
               id="email"
               type="email"
               autoComplete="username"
               placeholder="you@example.com"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
               required
             />
             <label htmlFor="password">Password</label>
@@ -87,6 +112,8 @@ function Login({ onDemo }) {
                 type={showPassword ? "text" : "password"}
                 autoComplete="current-password"
                 placeholder="Enter your password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
                 required
               />
               <button
@@ -98,17 +125,16 @@ function Login({ onDemo }) {
               </button>
             </div>
             <p className="login-help">
-              Accounts are provided by the program administrator.
+              Prototype sign-in only. Do not use a real account password.
             </p>
+            <button type="button" className="text-button" onClick={() => setRecovery(true)}>Forgot password?</button>
             <button
-              className="text-button"
-              type="button"
-              onClick={() => setRecovery(true)}
+              className="primary full"
+              type="submit"
+              disabled={isSubmitting}
             >
-              Forgot password?
-            </button>
-            <button className="primary full" type="submit">
-              Sign in <span aria-hidden="true">→</span>
+              {isSubmitting ? "Signing in…" : "Sign in"}{" "}
+              <span aria-hidden="true">→</span>
             </button>
           </form>
           {message && (
@@ -119,8 +145,8 @@ function Login({ onDemo }) {
           <div className="demo-section">
             <span className="demo-label">EXPLORE THE PROTOTYPE</span>
             <p>
-              Login is a design preview. No credentials are sent or saved.
-              Sample changes reset on refresh.
+              Prototype accounts use test credentials. Sample changes reset on
+              refresh.
             </p>
             <div className="demo-buttons">
               <button className="secondary" onClick={() => onDemo("student")}>
@@ -267,12 +293,20 @@ export default function App() {
     setPage(value);
     setMessage("");
   }
-  function enterDemo(value) {
+  function enterView(value) {
     setRole(value);
     setPage("Home");
     setPreview(false);
     setModuleId(2);
     setMessage("");
+  }
+  function enterLogin(user) { //takes a result from the backend and uses it to decide what to display the user based on their role type.
+    const role = user.roles.includes("teacher")
+      ? "instructor"
+      : user.roles.includes("student")
+        ? "student"
+        : "administrator";
+    enterView(role);
   }
   function leaveDemo() {
     setRole(null);
@@ -301,9 +335,24 @@ export default function App() {
     setEditor(null);
     setMessage("Content block saved for this demo session.");
   }
-  if (!role) return <Login onDemo={enterDemo} />;
-  if (role === "admin")
-    return <AdminWorkspace brand={<Brand />} onExit={leaveDemo} />;
+  if (!role) return <Login onDemo={enterView} onLogin={enterLogin} />;
+  if (role === "administrator") { //placeholder for the admin view until we actually add it
+    return (
+      <main className="login-page">
+        <section className="login-card">
+          <span className="eyebrow">CREDENTIALS VERIFIED</span>
+          <h2>Administrator access</h2>
+          <p className="muted"> 
+            Your test account is recognized, but the administrator view has not 
+            been implemented yet.
+          </p>
+          <button className="secondary" onClick={leaveDemo}>
+            Sign out
+          </button>
+        </section>
+      </main>
+    );
+  }
   const navItems = isInstructor
     ? [
         ["Home", "⌂"],
@@ -713,3 +762,4 @@ export default function App() {
     </div>
   );
 }
+

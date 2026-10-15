@@ -7,11 +7,45 @@ other sql files created beyond this one REQUIRE this header!
 CREATE TABLE IF NOT EXISTS users (
     userID SERIAL PRIMARY KEY,
     username TEXT NOT NULL UNIQUE,
+    email TEXT NOT NULL UNIQUE,
     passwordTemp TEXT NOT NULL,
     student BOOLEAN NOT NULL DEFAULT FALSE,
     teacher BOOLEAN NOT NULL DEFAULT FALSE,
     administrator BOOLEAN NOT NULL DEFAULT FALSE
 );
+
+DO $$
+DECLARE
+    has_id BOOLEAN;
+    has_userid BOOLEAN;
+BEGIN
+    SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = 'users'
+          AND column_name = 'id'
+    ) INTO has_id;
+
+    SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = 'users'
+          AND column_name = 'userid'
+    ) INTO has_userid;
+
+    IF has_id AND NOT has_userid THEN
+        ALTER TABLE users RENAME COLUMN id TO userid;
+    ELSIF has_id AND has_userid THEN
+        RAISE EXCEPTION 'users has both id and userid columns; resolve the duplicate columns before migrating';
+    ELSIF NOT has_userid THEN
+        RAISE EXCEPTION 'users has neither id nor userid column';
+    END IF;
+END;
+$$;
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT UNIQUE;
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS student BOOLEAN DEFAULT FALSE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS teacher BOOLEAN DEFAULT FALSE;
@@ -125,5 +159,3 @@ CREATE TABLE IF NOT EXISTS quizAttemptAnswers (
     FOREIGN KEY (choiceID, questionID)
         REFERENCES quizAnswerChoices(choiceID, questionID)
 );
-
-

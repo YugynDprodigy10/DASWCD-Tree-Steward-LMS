@@ -12,7 +12,7 @@ The backend must enforce permissions; hiding a button in React is not access con
 
 ## Current status
 
-The React prototype includes a matching login design, student and instructor demo views, a responsive card layout, and navigation across 12 sample modules. Instructors can add/edit cards in their sample assigned module (Week 2), keep cards as drafts, and preview the student view on desktop or mobile. Students see published cards without instructor controls and can mark announcements as read. All sample changes reset on refresh or sign out. Authentication, persistent course content, quiz authoring/attempts, submissions, enrollment, grades, admin tools, and messaging are not connected. The Express API and PostgreSQL development scripts remain separate from the UI.
+The React prototype includes a matching login design, student and instructor demo views, a responsive card layout, and navigation across 12 sample modules. Instructors can add/edit cards in their sample assigned module (Week 2), keep cards as drafts, and preview the student view on desktop or mobile. Students see published cards without instructor controls and can mark announcements as read. All sample changes reset on refresh or sign out. Prototype sign-in checks the development test users and their database roles, but stores plaintext test passwords and does not create a secure session or protect API routes. Never use real account credentials with it. Persistent course content, quiz authoring/attempts, submissions, enrollment, grades, admin tools, and messaging are not connected.
 
 [View the shared frontend preview](https://elegant-fox-d4ee0f.netlify.app). This is currently a manual deployment and may lag behind this repository.
 
@@ -75,7 +75,9 @@ npm run dev
 
 Check `http://localhost:3000/api/health`; it should return the database's current time. With both terminals running, the login page footer shows the same database time, which confirms the frontend, backend, and database are connected.
 
-If you ran the database before it moved to `backend/`, stop the old container once with `docker stop frontend-database-1`. Otherwise it keeps port 5432 and the backend connects to the old database.
+The Docker database is published on host port `5434` by default because a local PostgreSQL service may already use `5432`. PostgreSQL still listens on `5432` inside the container. The local API uses `DB_HOST_PORT` (or `DB_PORT`) to connect to the published host port. If you need another host port, set `DB_HOST_PORT` before running Docker Compose; the migration script automatically finds an available host port when it starts the database.
+
+To create the test users, run `npm run query` in `backend`. Then sign in with `teststudent1@example.com`, `testteacher1@example.com`, or `testadmin1@example.com`, all with the password `Test Password 1`.
 
 ## Try the interface
 
