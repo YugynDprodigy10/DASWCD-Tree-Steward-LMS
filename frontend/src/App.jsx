@@ -26,15 +26,16 @@ function Brand() {
 }
 
 function Login({ onDemo, onLogin }) {
-  const [recovery, setRecovery] = useState(false); //onLogin tells the app that the user has successfully logged in and provides the user data to the app. 
+  const [recovery, setRecovery] = useState(false); //onLogin tells the app that the user has successfully logged in and provides the user data to the app.
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  //all of these const values track your email and password input  
+  //all of these const values track your email and password input
 
-  async function submitLogin(event) { //When there's an email and password, this function sends a request to the backend with the email and password. If the response is successful, it calls onLogin with the user data. If there's an error, it sets the message state to display the error message.
+  async function submitLogin(event) {
+    //When there's an email and password, this function sends a request to the backend with the email and password. If the response is successful, it calls onLogin with the user data. If there's an error, it sets the message state to display the error message.
     event.preventDefault();
     setMessage("");
     setIsSubmitting(true);
@@ -127,7 +128,13 @@ function Login({ onDemo, onLogin }) {
             <p className="login-help">
               Prototype sign-in only. Do not use a real account password.
             </p>
-            <button type="button" className="text-button" onClick={() => setRecovery(true)}>Forgot password?</button>
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => setRecovery(true)}
+            >
+              Forgot password?
+            </button>
             <button
               className="primary full"
               type="submit"
@@ -300,7 +307,8 @@ export default function App() {
     setModuleId(2);
     setMessage("");
   }
-  function enterLogin(user) { //takes a result from the backend and uses it to decide what to display the user based on their role type.
+  function enterLogin(user) {
+    //takes a result from the backend and uses it to decide what to display the user based on their role type.
     const role = user.roles.includes("teacher")
       ? "instructor"
       : user.roles.includes("student")
@@ -336,23 +344,7 @@ export default function App() {
     setMessage("Content block saved for this demo session.");
   }
   if (!role) return <Login onDemo={enterView} onLogin={enterLogin} />;
-  if (role === "administrator") { //placeholder for the admin view until we actually add it
-    return (
-      <main className="login-page">
-        <section className="login-card">
-          <span className="eyebrow">CREDENTIALS VERIFIED</span>
-          <h2>Administrator access</h2>
-          <p className="muted"> 
-            Your test account is recognized, but the administrator view has not 
-            been implemented yet.
-          </p>
-          <button className="secondary" onClick={leaveDemo}>
-            Sign out
-          </button>
-        </section>
-      </main>
-    );
-  }
+  if (role === "admin" || role === "administrator") return <AdminWorkspace brand={<Brand />} onExit={leaveDemo} />;
   const navItems = isInstructor
     ? [
         ["Home", "⌂"],

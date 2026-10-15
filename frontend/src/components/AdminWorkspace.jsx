@@ -1,62 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import Modal from "./Modal";
 import { PasswordSetup } from "./AccountRecovery";
-import { modules } from "../data/course";
+import { modules as initialModules } from "../data/course";
+import AdminModules from "./AdminModules";
 import "./AdminWorkspace.css";
 
-const initialPeople = [
-  {
-    id: "person-1",
-    name: "Jordan Ellis",
-    email: "jordan@example.com",
-    role: "Student",
-    status: "Active",
-    modules: [],
-    completed: 3,
-    joined: "Sample enrollment · Week 1",
-  },
-  {
-    id: "person-2",
-    name: "Morgan Lee",
-    email: "morgan@example.com",
-    role: "Instructor",
-    status: "Active",
-    modules: [2, 3],
-    completed: 0,
-    joined: "Sample enrollment · Week 1",
-  },
-  {
-    id: "person-3",
-    name: "Sam Rivera",
-    email: "sam@example.com",
-    role: "Student",
-    status: "Inactive",
-    modules: [],
-    completed: 1,
-    joined: "Sample enrollment · Week 1",
-  },
-];
-const initialInvitations = [
-  {
-    id: "invite-1",
-    name: "Alex Park",
-    email: "alex@example.com",
-    role: "Student",
-    modules: [],
-    status: "Pending",
-  },
-  {
-    id: "invite-2",
-    name: "Taylor Reed",
-    email: "taylor@example.com",
-    role: "Instructor",
-    modules: [4],
-    status: "Expired",
-  },
-];
+import { initialPeople, initialInvitations } from "../data/admin";
 const normalizeEmail = (value) => value.trim().toLowerCase();
 
-function ModuleChoices({ selected, onChange }) {
+function ModuleChoices({ selected, onChange, modules }) {
   return (
     <fieldset className="module-choices">
       <legend>Assigned modules</legend>
@@ -86,19 +38,23 @@ function ModuleChoices({ selected, onChange }) {
   );
 }
 
-function PersonForm({ person, mode, onSave, onClose, emailTaken }) {
+function PersonForm({ person, mode, onSave, onClose, emailTaken, modules }) {
   const [name, setName] = useState(person?.name || "");
   const [email, setEmail] = useState(person?.email || "");
   const [role, setRole] = useState(person?.role || "Student");
   const [assigned, setAssigned] = useState(person?.modules || []);
   const [error, setError] = useState("");
-  const invite = mode === "invite";
+  const invite = mode === "invite" || mode === "add";
+  const directAdd = mode === "add";
+  const [confirmAdmin, setConfirmAdmin] = useState(false);
   const emailOnly = mode === "email";
   return (
     <Modal
       title={
         invite
-          ? "Invite someone to grow."
+          ? directAdd
+            ? "Add a sample person"
+            : "Invite someone to grow."
           : emailOnly
             ? "Change email address"
             : "Role & module access"
@@ -118,6 +74,10 @@ function PersonForm({ person, mode, onSave, onClose, emailTaken }) {
             );
             return;
           }
+          if (role === "Administrator" && !emailOnly && !confirmAdmin) {
+            setError("Confirm administrator access before saving.");
+            return;
+          }
           onSave({
             name: name.trim(),
             email: normalizeEmail(email),
@@ -128,7 +88,7 @@ function PersonForm({ person, mode, onSave, onClose, emailTaken }) {
       >
         <p className="muted">
           {invite
-            ? "Invite a student or instructor to Tree Steward Certification."
+            ? directAdd ? "Add a sample person and choose their role." : "Invite someone to Tree Steward Certification and choose their role."
             : `${person.name} · ${person.role}`}
         </p>
         {(invite || emailOnly) && (
@@ -166,20 +126,38 @@ function PersonForm({ person, mode, onSave, onClose, emailTaken }) {
             >
               <option>Student</option>
               <option>Instructor</option>
+              <option>Administrator</option>
             </select>
             <p className="helper">
-              Administrator access is not assigned in this demo.
+              Choose the access this person needs. Administrator changes are a
+              frontend preview only.
             </p>
             {role === "Instructor" && (
-              <ModuleChoices selected={assigned} onChange={setAssigned} />
+              <ModuleChoices
+                modules={modules}
+                selected={assigned}
+                onChange={setAssigned}
+              />
             )}
           </>
+        )}
+        {role === "Administrator" && !emailOnly && (
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={confirmAdmin}
+              onChange={(event) => setConfirmAdmin(event.target.checked)}
+            />
+            I understand this role manages people and course settings.
+          </label>
         )}
         <p className="notice">
           {emailOnly
             ? "This updates the same sample account. Its enrollment and learning history are retained. No real email address is changed."
             : invite
-              ? "Demo only: an invitation will be added to this session. No email or usable invitation link will be sent."
+              ? directAdd
+                ? "Adds a sample directory record only. No real account or sign-in access is created; live registration remains invitation-only."
+                : "Demo only: an invitation will be added to this session. Email delivery is not connected."
               : "Access changes apply only to this sample directory. Real permissions must be enforced by the backend."}
         </p>
         {error && (
@@ -192,7 +170,11 @@ function PersonForm({ person, mode, onSave, onClose, emailTaken }) {
             Cancel
           </button>
           <button className="primary" type="submit">
-            {invite ? "Create sample invitation" : "Save sample changes"}
+            {invite
+              ? directAdd
+                ? "Add sample person"
+                : "Create sample invitation"
+              : "Save sample changes"}
           </button>
         </div>
       </form>
@@ -202,6 +184,15 @@ function PersonForm({ person, mode, onSave, onClose, emailTaken }) {
 
 export default function AdminWorkspace({ brand, onExit }) {
   const [page, setPage] = useState("Overview");
+  const [modules, setModules] = useState(() =>
+    initialModules.map((module) => ({
+      ...module,
+      studentsVisible: true,
+      instructorsVisible: true,
+      description: "",
+    })),
+  );
+  const [showRemoved, setShowRemoved] = useState(false);
   const [people, setPeople] = useState(initialPeople);
   const [invitations, setInvitations] = useState(initialInvitations);
   const [search, setSearch] = useState("");
@@ -231,12 +222,17 @@ export default function AdminWorkspace({ brand, onExit }) {
     );
   const visiblePeople = people.filter(
     (person) =>
+      (showRemoved
+        ? person.status === "Removed"
+        : person.status !== "Removed") &&
       (filter === "All roles" || person.role === filter) &&
       `${person.name} ${person.email}`
         .toLowerCase()
         .includes(search.trim().toLowerCase()),
   );
-  const students = people.filter((person) => person.role === "Student");
+  const students = people.filter(
+    (person) => person.role === "Student" && person.status !== "Removed",
+  );
   function changeInvitation(invite, status) {
     if (status === "Pending" && emailTaken(invite.email)) {
       record(
@@ -294,11 +290,11 @@ export default function AdminWorkspace({ brand, onExit }) {
     setDialog(null);
   }
   const titles = {
-    Overview: "A place for everyone to grow.",
-    People: "Your learning community.",
-    Invitations: "Open the door to learning.",
-    Modules: "The right guide for every week.",
-    Progress: "See how learning takes root.",
+    Overview: "Class overview",
+    People: "People & access",
+    Invitations: "Invitations",
+    Modules: "Module management",
+    Progress: "Student progress",
   };
   return (
     <div className="app-shell admin-shell">
@@ -368,12 +364,20 @@ export default function AdminWorkspace({ brand, onExit }) {
                 Manage Tree Steward Certification with care.
               </p>
             </div>
-            <button
-              className="primary"
-              onClick={() => setDialog({ mode: "invite" })}
-            >
-              + Invite person
-            </button>
+            <div className="admin-actions">
+              <button
+                className="secondary"
+                onClick={() => setDialog({ mode: "add" })}
+              >
+                + Add person
+              </button>
+              <button
+                className="primary"
+                onClick={() => setDialog({ mode: "invite" })}
+              >
+                + Invite person
+              </button>
+            </div>
           </div>
           <p className="admin-demo-note">
             Sample workspace · No emails are sent or real accounts changed. All
@@ -391,8 +395,11 @@ export default function AdminWorkspace({ brand, onExit }) {
                   ["Students", students.length, "People"],
                   [
                     "Instructors",
-                    people.filter((person) => person.role === "Instructor")
-                      .length,
+                    people.filter(
+                      (person) =>
+                        person.role === "Instructor" &&
+                        person.status !== "Removed",
+                    ).length,
                     "People",
                   ],
                   [
@@ -475,9 +482,18 @@ export default function AdminWorkspace({ brand, onExit }) {
                     <option>All roles</option>
                     <option>Student</option>
                     <option>Instructor</option>
+                    <option>Administrator</option>
                   </select>
                 </div>
               </div>
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={showRemoved}
+                  onChange={(event) => setShowRemoved(event.target.checked)}
+                />
+                Show removed people
+              </label>
               <p className="helper" role="status">
                 {visiblePeople.length} people shown · Sample records
               </p>
@@ -510,36 +526,72 @@ export default function AdminWorkspace({ brand, onExit }) {
                         ? person.modules.length
                           ? `Assigned weeks: ${[...person.modules].sort((a, b) => a - b).join(", ")}`
                           : "No modules assigned"
-                        : `${person.completed} of 12 modules complete · Illustrative progress`}
+                        : person.role === "Administrator"
+                          ? "Manages people and course settings"
+                          : `${person.completed} of ${modules.length} modules complete · Illustrative progress`}
                     </p>
                     <div className="person-actions">
-                      <button
-                        className="text-button"
-                        onClick={() => setDialog({ mode: "email", person })}
-                      >
-                        Change email
-                      </button>
-                      <button
-                        className="text-button"
-                        onClick={() => setDialog({ mode: "access", person })}
-                      >
-                        Role & modules
-                      </button>
-                      <button
-                        className="text-button"
-                        disabled={person.status !== "Active"}
-                        onClick={() => setDialog({ mode: "reset", person })}
-                      >
-                        Password reset
-                      </button>
-                      <button
-                        className="text-button"
-                        onClick={() => setDialog({ mode: "status", person })}
-                      >
-                        {person.status === "Active"
-                          ? "Deactivate"
-                          : "Reactivate"}
-                      </button>
+                      {person.status !== "Removed" ? (
+                        <>
+                          <button
+                            className="text-button"
+                            onClick={() => setDialog({ mode: "email", person })}
+                          >
+                            Change email
+                          </button>
+                          <button
+                            className="text-button"
+                            onClick={() =>
+                              setDialog({ mode: "access", person })
+                            }
+                          >
+                            Role & modules
+                          </button>
+                          <button
+                            className="text-button"
+                            disabled={person.status !== "Active"}
+                            onClick={() => setDialog({ mode: "reset", person })}
+                          >
+                            Password reset
+                          </button>
+                          <button
+                            className="text-button"
+                            onClick={() =>
+                              setDialog({ mode: "status", person })
+                            }
+                          >
+                            {person.status === "Active"
+                              ? "Deactivate"
+                              : "Reactivate"}
+                          </button>
+                          <button
+                            className="text-button danger-text"
+                            onClick={() =>
+                              setDialog({ mode: "remove", person })
+                            }
+                          >
+                            Remove person
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          className="text-button"
+                          onClick={() => {
+                            setPeople((previous) =>
+                              previous.map((item) =>
+                                item.id === person.id
+                                  ? { ...item, status: "Inactive" }
+                                  : item,
+                              ),
+                            );
+                            record(
+                              `${person.name} restored as inactive. History and assignments were retained.`,
+                            );
+                          }}
+                        >
+                          Restore person
+                        </button>
+                      )}
                     </div>
                   </article>
                 ))}
@@ -597,14 +649,12 @@ export default function AdminWorkspace({ brand, onExit }) {
                             Preview acceptance
                           </button>
                           <button
-                            className="text-button"
+                            className="secondary"
                             onClick={() =>
-                              record(
-                                `Sample resend requested for ${invite.name}. No email was sent.`,
-                              )
+                              setDialog({ mode: "deliver", invite })
                             }
                           >
-                            Resend
+                            Send invite link
                           </button>
                           <button
                             className="text-button"
@@ -636,36 +686,13 @@ export default function AdminWorkspace({ brand, onExit }) {
             </>
           )}
           {page === "Modules" && (
-            <section
-              className="admin-module-list"
-              aria-label="Module assignments"
-            >
-              {modules.map((module) => (
-                <article className="admin-panel" key={module.id}>
-                  <span className="eyebrow">
-                    WEEK {String(module.id).padStart(2, "0")}
-                  </span>
-                  <h2>{module.title}</h2>
-                  <p className="muted">
-                    {people
-                      .filter(
-                        (person) =>
-                          person.status === "Active" &&
-                          person.role === "Instructor" &&
-                          person.modules.includes(module.id),
-                      )
-                      .map((person) => person.name)
-                      .join(", ") || "No active instructor assigned"}
-                  </p>
-                  <button
-                    className="secondary"
-                    onClick={() => setDialog({ mode: "assign", module })}
-                  >
-                    Assign instructors
-                  </button>
-                </article>
-              ))}
-            </section>
+            <AdminModules
+              modules={modules}
+              people={people}
+              onChange={setModules}
+              onNotice={record}
+              onAssign={(module) => setDialog({ mode: "assign", module })}
+            />
           )}
           {page === "Progress" && (
             <section className="admin-panel">
@@ -679,12 +706,13 @@ export default function AdminWorkspace({ brand, onExit }) {
                   <div>
                     <strong>{person.name}</strong>
                     <span className="helper">
-                      {person.status} · {person.completed} / 12 modules
+                      {person.status} · {person.completed} / {modules.length}{" "}
+                      modules
                     </span>
                   </div>
                   <progress
                     value={person.completed}
-                    max={12}
+                    max={modules.length}
                     aria-label={`${person.name} sample module completion`}
                   />
                 </div>
@@ -697,15 +725,34 @@ export default function AdminWorkspace({ brand, onExit }) {
           </footer>
         </main>
       </div>
-      {dialog && ["invite", "email", "access"].includes(dialog.mode) && (
+      {dialog && ["invite", "add", "email", "access"].includes(dialog.mode) && (
         <PersonForm
           key={`${dialog.mode}-${dialog.person?.id || "new"}`}
           mode={dialog.mode}
           person={dialog.person}
           emailTaken={emailTaken}
+          modules={modules}
           onClose={() => setDialog(null)}
           onSave={(values) => {
-            if (dialog.mode === "invite") {
+            if (dialog.mode === "add") {
+              setPeople((previous) => [
+                ...previous,
+                {
+                  ...values,
+                  id: crypto.randomUUID(),
+                  status: "Active",
+                  completed: 0,
+                  joined: "Added to sample directory",
+                },
+              ]);
+              setPage("People");
+              setShowRemoved(false);
+              setSearch("");
+              setFilter("All roles");
+              record(
+                `${values.name} added to the sample directory. No real account was created.`,
+              );
+            } else if (dialog.mode === "invite") {
               setInvitations((previous) => [
                 { ...values, id: crypto.randomUUID(), status: "Pending" },
                 ...previous,
@@ -731,6 +778,56 @@ export default function AdminWorkspace({ brand, onExit }) {
             setDialog(null);
           }}
         />
+      )}
+      {dialog?.mode === "deliver" && (
+        <InvitationDelivery
+          invite={dialog.invite}
+          onClose={() => setDialog(null)}
+          onSend={() => {
+            record(
+              `Sample invitation delivery previewed for ${dialog.invite.name}. No email was sent.`,
+            );
+            setDialog(null);
+          }}
+        />
+      )}
+      {dialog?.mode === "remove" && (
+        <Modal
+          title="Remove person from this class?"
+          onClose={() => setDialog(null)}
+        >
+          <p>
+            {dialog.person.name} will leave the active directory. Their learning
+            history and saved assignments will be retained; you can restore them
+            from “Show removed people”.
+          </p>
+          <p className="notice">
+            This only changes the sample directory. No real account is deleted.
+          </p>
+          <div className="dialog-actions">
+            <button className="secondary" onClick={() => setDialog(null)}>
+              Cancel
+            </button>
+            <button
+              className="primary"
+              onClick={() => {
+                setPeople((previous) =>
+                  previous.map((person) =>
+                    person.id === dialog.person.id
+                      ? { ...person, status: "Removed" }
+                      : person,
+                  ),
+                );
+                record(
+                  `${dialog.person.name} removed from the sample class. History retained.`,
+                );
+                setDialog(null);
+              }}
+            >
+              Remove from class
+            </button>
+          </div>
+        </Modal>
       )}
       {dialog?.mode === "accept" && (
         <Modal
@@ -923,6 +1020,50 @@ function AssignmentDialog({ module, people, onSave, onClose }) {
           </button>
         </div>
       </form>
+    </Modal>
+  );
+}
+
+function InvitationDelivery({ invite, onClose, onSend }) {
+  const [message, setMessage] = useState("");
+  const link = `https://steward-tree.invalid/invite/${encodeURIComponent(invite.id)}`;
+  return (
+    <Modal title="Send invitation link" onClose={onClose}>
+      <p>
+        To <strong>{invite.email}</strong> · {invite.role}
+      </p>
+      <p className="notice">
+        Delivery preview only. Email sending and secure invitation tokens need
+        backend support. This placeholder link cannot create an account.
+      </p>
+      <label htmlFor="sample-invite-link">
+        Sample invitation link (not usable)
+      </label>
+      <input id="sample-invite-link" readOnly value={link} />
+      <button
+        className="text-button"
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(link);
+            setMessage("Sample link copied. It is not a usable invitation.");
+          } catch {
+            setMessage(
+              "Copy was unavailable. Select the sample link above to copy it manually.",
+            );
+          }
+        }}
+      >
+        Copy sample link
+      </button>
+      {message && <p role="status">{message}</p>}
+      <div className="dialog-actions">
+        <button className="secondary" onClick={onClose}>
+          Cancel
+        </button>
+        <button className="primary" onClick={onSend}>
+          Preview sending invitation
+        </button>
+      </div>
     </Modal>
   );
 }

@@ -24,3 +24,11 @@ Run `npm run dev` from `frontend`, then choose **Administrator demo**. Use sampl
 ## Scope
 
 The sample directory and module assignments do not change authentication or the separate instructor demo's permissions. Real integration needs backend authorization and a shared account/course data source. Progress is explicitly illustrative. The 12-character password minimum is a preview choice, not a finalized backend policy.
+
+## Module and people management checks
+
+- Add a module and verify both audience switches start off. Enable instructors only: it must appear in Instructor preview and be absent in Student preview. Edit its details and reject duplicate titles.
+- Add a sample administrator. Saving requires explicit administrator confirmation. Verify the role filter finds them.
+- Remove a person, find them with Show removed, then restore them as inactive without replacing their ID or progress.
+- Open Send invite link. Copy the sample `.invalid` URL and preview delivery; the result must explicitly say no email was sent.
+- Module switches affect only the admin catalog preview until shared course data and backend permissions are connected. They do not currently control the separate student/instructor demo pages.
