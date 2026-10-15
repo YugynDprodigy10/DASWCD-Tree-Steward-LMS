@@ -34,12 +34,12 @@ export const initialBlocks = [
     published: true,
   },
   {
-    id: "assignment-2",
+    id: "material-2",
     moduleId: 2,
-    type: "Assignment",
-    title: "Tree health assessment report",
+    type: "Learning material",
+    title: "Tree health field guide",
     description:
-      "Choose a tree in your neighborhood. Record what you notice about its leaves, trunk, and surrounding soil. Bring your observations and questions to class.",
+      "Read the field guide or watch a lesson on identifying signs of tree health. Your instructor will attach the learning material here.",
     published: true,
     detail: "Sample assignment · No due date set",
   },

@@ -465,7 +465,7 @@
 .content-card.announcement:before {
   background: #d9c399;
 }
-.content-card.assignment:before {
+.content-card.learning-material:before {
   background: #b3c99b;
 }
 .card-top {
@@ -486,7 +486,7 @@
   background: #faf0de;
   color: #906b2e;
 }
-.type-tag.assignment {
+.type-tag.learning-material {
   background: #ebf3df;
   color: #567335;
 }
@@ -987,3 +987,8 @@
       border-color 0.15s;
   }
 }
+
+.learning-resource video { width: 100%; max-height: 360px; }
+.learning-resource .resource-link { display: inline-block; margin: 8px 12px 8px 0; overflow-wrap: anywhere; }
+.learning-resource .detail-copy { white-space: pre-wrap; }
+.type-tag.final-exam { background: #e8e4f2; color: #514171; }
