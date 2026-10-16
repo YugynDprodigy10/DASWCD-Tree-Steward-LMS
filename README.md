@@ -81,6 +81,20 @@ To create the test users, run `npm run query` in `backend`. Then sign in with `t
 
 ## Try the interface
 
+### Administrator and account-recovery preview
+
+Choose **Administrator demo** on the login screen to explore the single-class admin workspace. It includes an overview, a searchable People directory, role/module assignments, invitations, and illustrative student progress.
+
+- **Invite person** creates a sample pending invitation. Duplicate account/pending-invitation emails are rejected without regard to capitalization.
+- In **Invitations**, copy a clearly labeled sample link, preview sending/acceptance, revoke, or renew expired/revoked invitations. Completing sample acceptance adds the person to the local directory.
+- In **People**, change an email while retaining the same account and progress, add a sample person, assign student/instructor/administrator roles with confirmation for administrator access, remove/restore people, request a sample password reset, or deactivate/reactivate an account.
+- In **Modules**, add/edit module details, independently toggle student and instructor visibility, preview each audience catalog, and select active assigned instructors. New modules start hidden from both audiences. Inactive instructors retain their assignments but are not displayed as active module instructors.
+- **Forgot password?** on the login page previews the request and reset screens. Use made-up credentials only. Passwords are not sent or saved.
+
+These workflows use in-memory sample data and reset on refresh or sign out. They do not send email, generate usable invitation/reset links, authenticate users, or modify real accounts. The existing API health check remains separate. Backend integration must provide invitation/reset token validation and expiration, authenticated role enforcement, and email updates tied to stable user IDs. Module visibility currently affects the admin catalog preview, not the separate student/instructor demo routes. Multiple simultaneous classes are outside this preview.
+
+### Student and instructor preview
+
 Choose **Student demo** or **Instructor demo** on the login screen; no credentials are needed. The sign-in form is a design preview and does not authenticate.
 
 - In the instructor demo, add a block in Week 2. Leave **Visible in student demo** unchecked to create a draft.

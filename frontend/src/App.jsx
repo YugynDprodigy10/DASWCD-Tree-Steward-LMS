@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import Modal from "./components/Modal";
+import BlockEditor from "./components/BlockEditor";
+import { isGoogleForm } from "./data/forms";
 import { initialBlocks, modules } from "./data/course";
 import "./App.css";
 import ApiStatus from "./components/ApiStatus";
+import AdminWorkspace from "./components/AdminWorkspace";
+import AccountRecovery from "./components/AccountRecovery";
 
 function Brand() {
   return (
@@ -23,15 +27,17 @@ function Brand() {
   );
 }
 
-function Login({ onDemo, onLogin }) { //onLogin tells the app that the user has successfully logged in and provides the user data to the app. 
+function Login({ onDemo, onLogin }) {
+  const [recovery, setRecovery] = useState(false); //onLogin tells the app that the user has successfully logged in and provides the user data to the app.
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  //all of these const values track your email and password input  
+  //all of these const values track your email and password input
 
-  async function submitLogin(event) { //When there's an email and password, this function sends a request to the backend with the email and password. If the response is successful, it calls onLogin with the user data. If there's an error, it sets the message state to display the error message.
+  async function submitLogin(event) {
+    //When there's an email and password, this function sends a request to the backend with the email and password. If the response is successful, it calls onLogin with the user data. If there's an error, it sets the message state to display the error message.
     event.preventDefault();
     setMessage("");
     setIsSubmitting(true);
@@ -56,20 +62,17 @@ function Login({ onDemo, onLogin }) { //onLogin tells the app that the user has 
     }
   }
 
+  if (recovery) return <AccountRecovery onBack={() => setRecovery(false)} />;
   return (
     <div className="login-page">
+      <a className="skip-link" href="#login-main">Skip to sign in</a>
       <header>
         <Brand />
         <span className="subtle">Tree Steward Program</span>
       </header>
       <main className="login-grid">
         <section className="login-story">
-          <span className="eyebrow">LEARN. CARE. MAKE A DIFFERENCE.</span>
-          <h1>
-            Stronger roots.
-            <br />
-            Greener communities.
-          </h1>
+          <h1>Tree Steward Certification</h1>
           <p>
             A simple space to learn, share, and grow your knowledge of desert
             tree stewardship.
@@ -82,11 +85,9 @@ function Login({ onDemo, onLogin }) { //onLogin tells the app that the user has 
             <div className="trunk" />
             <div className="ground" />
           </div>
-          <span className="story-caption">
-            DESERT TREE STEWARDSHIP · 12 WEEKS OF DISCOVERY
-          </span>
+
         </section>
-        <section className="login-card">
+        <section className="login-card" id="login-main" tabIndex={-1}>
           <span className="eyebrow">YOUR LEARNING SPACE</span>
           <h2>Welcome back.</h2>
           <p className="muted">Sign in to continue your stewardship journey.</p>
@@ -124,6 +125,13 @@ function Login({ onDemo, onLogin }) { //onLogin tells the app that the user has 
               Prototype sign-in only. Do not use a real account password.
             </p>
             <button
+              type="button"
+              className="text-button"
+              onClick={() => setRecovery(true)}
+            >
+              Forgot password?
+            </button>
+            <button
               className="primary full"
               type="submit"
               disabled={isSubmitting}
@@ -153,6 +161,9 @@ function Login({ onDemo, onLogin }) { //onLogin tells the app that the user has 
               >
                 Instructor demo
               </button>
+              <button className="secondary" onClick={() => onDemo("admin")}>
+                Administrator demo
+              </button>
             </div>
           </div>
         </section>
@@ -162,99 +173,6 @@ function Login({ onDemo, onLogin }) { //onLogin tells the app that the user has 
         <ApiStatus />
       </footer>
     </div>
-  );
-}
-
-function BlockEditor({ block, onSave, onClose }) {
-  const [type, setType] = useState(block?.type || "Announcement");
-  const [title, setTitle] = useState(block?.title || "");
-  const [description, setDescription] = useState(block?.description || "");
-  const [published, setPublished] = useState(block?.published || false);
-  const [error, setError] = useState("");
-  return (
-    <Modal
-      title={block?.id ? "Edit content block" : "Add content block"}
-      onClose={onClose}
-    >
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!title.trim() || !description.trim()) {
-            setError(
-              "Enter a title and description with more than just spaces.",
-            );
-            return;
-          }
-          onSave({
-            type,
-            title: title.trim(),
-            description: description.trim(),
-            published,
-          });
-        }}
-      >
-        <p className="muted">
-          Organize one piece of learning at a time. Changes are saved only for
-          this demo session.
-        </p>
-        <label htmlFor="block-type">Content type</label>
-        <select
-          id="block-type"
-          value={type}
-          onChange={(event) => setType(event.target.value)}
-        >
-          {["Announcement", "Quiz", "Assignment"].map((value) => (
-            <option key={value}>{value}</option>
-          ))}
-        </select>
-        <label htmlFor="block-title">Title</label>
-        <input
-          id="block-title"
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          maxLength={150}
-          required
-        />
-        <label htmlFor="block-description">Description</label>
-        <textarea
-          id="block-description"
-          rows={5}
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-          required
-        />
-        {type !== "Announcement" && (
-          <p className="notice">
-            This creates a {type.toLowerCase()} card only. Question authoring,
-            grading, and file submissions will be connected in a later stage.
-          </p>
-        )}
-        <label className="checkbox-label">
-          <input
-            type="checkbox"
-            checked={published}
-            onChange={(event) => setPublished(event.target.checked)}
-          />
-          Visible in student demo
-        </label>
-        <p className="helper">
-          Unchecked blocks stay as instructor-only drafts.
-        </p>
-        {error && (
-          <p role="alert" className="notice">
-            {error}
-          </p>
-        )}
-        <div className="dialog-actions">
-          <button type="button" className="secondary" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="primary" type="submit">
-            Save block
-          </button>
-        </div>
-      </form>
-    </Modal>
   );
 }
 
@@ -269,6 +187,8 @@ export default function App() {
   const [read, setRead] = useState([]);
   const [message, setMessage] = useState("");
   const heading = useRef(null);
+  const resourceUrls = useRef(new Set());
+  useEffect(() => () => { resourceUrls.current.forEach(url => URL.revokeObjectURL(url)); }, []);
   const isInstructor = role === "instructor" && !preview;
   const canEdit = isInstructor && moduleId === 2;
   const currentModule = modules.find((item) => item.id === moduleId);
@@ -292,7 +212,8 @@ export default function App() {
     setModuleId(2);
     setMessage("");
   }
-  function enterLogin(user) { //takes a result from the backend and uses it to decide what to display the user based on their role type.
+  function enterLogin(user) {
+    //takes a result from the backend and uses it to decide what to display the user based on their role type.
     const role = user.roles.includes("teacher")
       ? "instructor"
       : user.roles.includes("student")
@@ -301,6 +222,8 @@ export default function App() {
     enterView(role);
   }
   function leaveDemo() {
+    resourceUrls.current.forEach(url => URL.revokeObjectURL(url));
+    resourceUrls.current.clear();
     setRole(null);
     setPreview(false);
     setEditor(null);
@@ -311,11 +234,16 @@ export default function App() {
   }
   function saveBlock(values) {
     if (!canEdit) return;
+    if (values.resource?.url) resourceUrls.current.add(values.resource.url);
     setBlocks((previous) =>
       editor.block?.id
         ? previous.map((item) =>
             item.id === editor.block.id
-              ? { ...item, ...values, detail: item.type === values.type ? item.detail : undefined }
+              ? {
+                  ...item,
+                  ...values,
+                  detail: item.type === values.type ? item.detail : undefined,
+                }
               : item,
           )
         : [...previous, { ...values, id: crypto.randomUUID(), moduleId }],
@@ -324,23 +252,7 @@ export default function App() {
     setMessage("Content block saved for this demo session.");
   }
   if (!role) return <Login onDemo={enterView} onLogin={enterLogin} />;
-  if (role === "administrator") { //placeholder for the admin view until we actually add it
-    return (
-      <main className="login-page">
-        <section className="login-card">
-          <span className="eyebrow">CREDENTIALS VERIFIED</span>
-          <h2>Administrator access</h2>
-          <p className="muted"> 
-            Your test account is recognized, but the administrator view has not 
-            been implemented yet.
-          </p>
-          <button className="secondary" onClick={leaveDemo}>
-            Sign out
-          </button>
-        </section>
-      </main>
-    );
-  }
+  if (role === "admin" || role === "administrator") return <AdminWorkspace brand={<Brand />} onExit={leaveDemo} />;
   const navItems = isInstructor
     ? [
         ["Home", "⌂"],
@@ -376,21 +288,7 @@ export default function App() {
             </button>
           ))}
         </nav>
-        <div className="course-meta">
-          12 weekly modules
-          <br />
-          <span>
-            {isInstructor
-              ? "Your teaching module: Week 2"
-              : "Learn at your own pace"}
-          </span>
-        </div>
         <div className="sidebar-bottom">
-          <p>
-            Small steps.
-            <br />
-            Stronger roots.
-          </p>
           <span className="user-role">
             {isInstructor ? "Instructor" : "Student"} sample view
           </span>
@@ -464,29 +362,17 @@ export default function App() {
           </div>
           <div className="page-heading">
             <div>
-              <span className="eyebrow">
-                {page === "Home"
-                  ? "EXPLORE · LEARN · GROW"
-                  : "TREE STEWARD CERTIFICATION"}
-              </span>
               <h1 ref={heading} tabIndex={-1}>
                 {page === "Home"
                   ? `Module ${moduleId}: ${currentModule.title}`
                   : page === "Create"
-                    ? "Make room for learning."
+                    ? "Create content"
                     : page === "Students"
-                      ? "Your learning community."
+                      ? "Students"
                       : page === "Gradebook"
                         ? "Course gradebook"
                         : "Your learning progress"}
               </h1>
-              <p className="muted">
-                {page === "Home"
-                  ? "Everything for this week, in one place."
-                  : page === "Create"
-                    ? "Add a clear, focused piece of content to your assigned module."
-                    : "A simple overview of your course."}
-              </p>
             </div>
             {page === "Home" && (
               <span className="week-count">
@@ -521,10 +407,10 @@ export default function App() {
                 {shownBlocks.map((block) => (
                   <article
                     key={block.id}
-                    className={`content-card ${block.type.toLowerCase()}`}
+                    className={`content-card ${block.type.toLowerCase().replaceAll(" ", "-")}`}
                   >
                     <div className="card-top">
-                      <span className={`type-tag ${block.type.toLowerCase()}`}>
+                      <span className={`type-tag ${block.type.toLowerCase().replaceAll(" ", "-")}`}>
                         {block.type}
                       </span>
                       {!block.published && (
@@ -557,7 +443,7 @@ export default function App() {
                           ? !isInstructor && read.includes(block.id)
                             ? "Read"
                             : "Course update"
-                          : block.detail || `${block.type} setup pending`}
+                          : block.type === "Learning material" ? block.resource?.name || "File not added yet" : block.type === "Final exam" ? `Multiple choice + ${block.writtenQuestions || 1} written responses` : "Multiple choice · Google Forms"}
                       </span>
                       <button
                         className="text-button"
@@ -615,7 +501,7 @@ export default function App() {
           )}
           {page === "Create" && (
             <section className="create-grid">
-              {["Announcement", "Quiz", "Assignment"].map((type) => (
+              {["Announcement", "Learning material", "Quiz", "Final exam"].map((type) => (
                 <button
                   className="create-card"
                   key={type}
@@ -631,20 +517,20 @@ export default function App() {
                     })
                   }
                 >
-                  <span className={`type-tag ${type.toLowerCase()}`}>
+                  <span className={`type-tag ${type.toLowerCase().replaceAll(" ", "-")}`}>
                     {type}
                   </span>
                   <h2>
                     {type === "Announcement"
                       ? "Share an update"
                       : type === "Quiz"
-                        ? "Introduce a knowledge check"
-                        : "Set a learning activity"}
+                        ? "Link a Google Forms quiz"
+                        : type === "Final exam" ? "Link the final exam" : "Upload a PDF or video"}
                   </h2>
                   <p>
                     {type === "Announcement"
                       ? "Keep everyone informed about this week."
-                      : "Create a placeholder card for upcoming content."}
+                      : type === "Learning material" ? "Share course reading or a video lesson." : type === "Quiz" ? "Multiple-choice questions in Google Forms." : "Multiple choice plus 1–3 written responses."}
                   </p>
                   <span className="text-button">Create block →</span>
                 </button>
@@ -715,17 +601,25 @@ export default function App() {
       )}
       {detail && (
         <Modal title={detail.title} onClose={() => setDetail(null)}>
-          <span className={`type-tag ${detail.type.toLowerCase()}`}>
+          <span className={`type-tag ${detail.type.toLowerCase().replaceAll(" ", "-")}`}>
             {detail.type}
           </span>
           <p className="detail-copy">{detail.description}</p>
-          {detail.type !== "Announcement" && (
-            <p className="notice">
-              {detail.type === "Quiz"
-                ? "Quiz questions, attempts, and grading are not connected yet."
-                : "File submissions and due dates are not connected yet."}{" "}
-              This is a sample content card.
-            </p>
+          {(detail.type === "Quiz" || detail.type === "Final exam") && (
+            <div className="learning-resource">
+              <p>{detail.type === "Quiz" ? "Multiple-choice quiz" : `Final exam · Multiple choice + ${detail.writtenQuestions || 1} written responses`}</p>
+              {isGoogleForm(detail.formUrl) ? <a className="primary resource-link" href={detail.formUrl} target="_blank" rel="noopener noreferrer">Open in Google Forms (new tab)</a> : <p className="notice">Your instructor has not added the form link yet.</p>}
+              <p className="helper">Responses are submitted in Google Forms. Results are not synced here.</p>
+            </div>
+          )}
+          {detail.type === "Learning material" && (
+            <div className="learning-resource">
+              {detail.resource ? <>
+                {detail.resource.kind === "video" && <><video controls preload="metadata" aria-label={detail.title} src={detail.resource.url} /><h3>Transcript</h3><p className="detail-copy">{detail.transcript}</p></>}
+                <a className="primary resource-link" href={detail.resource.url} target="_blank" rel="noopener noreferrer">Open {detail.resource.kind === "pdf" ? "PDF" : "video"} (new tab)</a>
+                <a className="resource-link" href={detail.resource.url} download={detail.resource.name}>Download {detail.resource.name}</a>
+              </> : <p className="notice">Your instructor has not added a file yet.</p>}
+            </div>
           )}
           {detail.type === "Announcement" && !isInstructor && (
             <button
