@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import Modal from "./components/Modal";
 import BlockEditor from "./components/BlockEditor";
-import { isGoogleForm } from "./data/forms";
+import QuizWorkspace from "./quiz/QuizWorkspace";
+import QuizRunner from "./quiz/QuizRunner";
+import { resetDemoQuizzes } from "./quiz/service";
 import { initialBlocks, modules } from "./data/course";
 import "./App.css";
 import ApiStatus from "./components/ApiStatus";
@@ -177,6 +179,11 @@ function Login({ onDemo, onLogin }) {
 }
 
 export default function App() {
+  return new URLSearchParams(window.location.search).has("quiz") ? <QuizRunner /> : <CourseApp />;
+}
+
+function CourseApp() {
+  const [user, setUser] = useState(null);
   const [role, setRole] = useState(null);
   const [preview, setPreview] = useState(false);
   const [moduleId, setModuleId] = useState(2);
@@ -191,9 +198,10 @@ export default function App() {
   useEffect(() => () => { resourceUrls.current.forEach(url => URL.revokeObjectURL(url)); }, []);
   const isInstructor = role === "instructor" && !preview;
   const canEdit = isInstructor && moduleId === 2;
+  const canEditQuiz = isInstructor && (user ? true : moduleId === 2);
   const currentModule = modules.find((item) => item.id === moduleId);
   const shownBlocks = blocks.filter(
-    (item) => item.moduleId === moduleId && (isInstructor || item.published),
+    (item) => item.type !== "Quiz" && item.type !== "Final exam" && item.moduleId === moduleId && (isInstructor || item.published),
   );
   useEffect(() => {
     if (role) {
@@ -219,11 +227,14 @@ export default function App() {
       : user.roles.includes("student")
         ? "student"
         : "administrator";
+    setUser(user);
     enterView(role);
   }
   function leaveDemo() {
     resourceUrls.current.forEach(url => URL.revokeObjectURL(url));
     resourceUrls.current.clear();
+    setUser(null);
+    resetDemoQuizzes();
     setRole(null);
     setPreview(false);
     setEditor(null);
@@ -367,14 +378,14 @@ export default function App() {
                   ? `Module ${moduleId}: ${currentModule.title}`
                   : page === "Create"
                     ? "Create content"
-                    : page === "Students"
+                    : page === "Quizzes" ? "Quiz builder" : page === "Students"
                       ? "Students"
                       : page === "Gradebook"
                         ? "Course gradebook"
                         : "Your learning progress"}
               </h1>
             </div>
-            {page === "Home" && (
+          {page === "Home" && (
               <span className="week-count">
                 WEEK {String(moduleId).padStart(2, "0")} / 12
               </span>
@@ -401,6 +412,7 @@ export default function App() {
               {message}
             </p>
           )}
+            {(page === "Home" || page === "Quizzes") && <QuizWorkspace key={`${moduleId}-${role}-${preview}`} moduleId={moduleId} user={user} instructor={isInstructor} preview={preview} canEdit={canEditQuiz} />}
           {page === "Home" && (
             <>
               <section className="content-stack" aria-label="Module content">
@@ -443,7 +455,7 @@ export default function App() {
                           ? !isInstructor && read.includes(block.id)
                             ? "Read"
                             : "Course update"
-                          : block.type === "Learning material" ? block.resource?.name || "File not added yet" : block.type === "Final exam" ? `Multiple choice + ${block.writtenQuestions || 1} written responses` : "Multiple choice · Google Forms"}
+                          : block.type === "Learning material" ? block.resource?.name || "File not added yet" : block.type === "Final exam" ? `Multiple choice + ${block.writtenQuestions || 1} written responses` : "Multiple choice"}
                       </span>
                       <button
                         className="text-button"
@@ -505,8 +517,9 @@ export default function App() {
                 <button
                   className="create-card"
                   key={type}
-                  disabled={!canEdit}
+                  disabled={type === "Final exam" || (type === "Quiz" ? !canEditQuiz : !canEdit)}
                   onClick={() =>
+                    type === "Quiz" ? navigate("Quizzes") :
                     setEditor({
                       block: {
                         type,
@@ -524,13 +537,13 @@ export default function App() {
                     {type === "Announcement"
                       ? "Share an update"
                       : type === "Quiz"
-                        ? "Link a Google Forms quiz"
-                        : type === "Final exam" ? "Link the final exam" : "Upload a PDF or video"}
+                        ? "Build a multiple-choice quiz"
+                        : type === "Final exam" ? "Final exam — coming next" : "Upload a PDF or video"}
                   </h2>
                   <p>
                     {type === "Announcement"
                       ? "Keep everyone informed about this week."
-                      : type === "Learning material" ? "Share course reading or a video lesson." : type === "Quiz" ? "Multiple-choice questions in Google Forms." : "Multiple choice plus 1–3 written responses."}
+                      : type === "Learning material" ? "Share course reading or a video lesson." : type === "Quiz" ? "Add questions, choose correct answers, and publish." : "Written-response grading needs backend support."}
                   </p>
                   <span className="text-button">Create block →</span>
                 </button>
@@ -605,13 +618,6 @@ export default function App() {
             {detail.type}
           </span>
           <p className="detail-copy">{detail.description}</p>
-          {(detail.type === "Quiz" || detail.type === "Final exam") && (
-            <div className="learning-resource">
-              <p>{detail.type === "Quiz" ? "Multiple-choice quiz" : `Final exam · Multiple choice + ${detail.writtenQuestions || 1} written responses`}</p>
-              {isGoogleForm(detail.formUrl) ? <a className="primary resource-link" href={detail.formUrl} target="_blank" rel="noopener noreferrer">Open in Google Forms (new tab)</a> : <p className="notice">Your instructor has not added the form link yet.</p>}
-              <p className="helper">Responses are submitted in Google Forms. Results are not synced here.</p>
-            </div>
-          )}
           {detail.type === "Learning material" && (
             <div className="learning-resource">
               {detail.resource ? <>
