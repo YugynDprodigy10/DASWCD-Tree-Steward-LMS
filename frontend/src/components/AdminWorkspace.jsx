@@ -330,12 +330,8 @@ export default function AdminWorkspace({ brand, onExit }) {
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <p>
-            Help your
-            <br />
-            community flourish.
-          </p>
-          <span className="user-role">Administrator sample view</span>
+
+
           <button className="text-button" onClick={onExit}>
             Back to sign in →
           </button>
@@ -356,13 +352,11 @@ export default function AdminWorkspace({ brand, onExit }) {
         <main id="admin-main" tabIndex={-1}>
           <div className="page-heading">
             <div>
-              <span className="eyebrow">ONE CLASS · A SHARED PURPOSE</span>
+
               <h1 ref={heading} tabIndex={-1}>
                 {titles[page]}
               </h1>
-              <p className="muted">
-                Manage Tree Steward Certification with care.
-              </p>
+
             </div>
             <div className="admin-actions">
               <button

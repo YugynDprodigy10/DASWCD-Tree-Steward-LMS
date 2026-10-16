@@ -15,16 +15,6 @@ export const modules = [
 
 export const initialBlocks = [
   {
-    id: "quiz-2",
-    moduleId: 2,
-    type: "Quiz",
-    title: "Native species ID quiz",
-    description:
-      "Review the identifying features of trees in our desert landscape.",
-    published: true,
-    detail: "Sample quiz · Questions are not available yet",
-  },
-  {
     id: "announcement-2",
     moduleId: 2,
     type: "Announcement",

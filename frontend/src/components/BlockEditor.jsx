@@ -1,32 +1,27 @@
 import { useState } from "react";
 import Modal from "./Modal";
 
-import { isGoogleForm } from "../data/forms";
+
 
 export default function BlockEditor({ block, onSave, onClose }) {
   const [type, setType] = useState(block?.type || "Announcement");
   const [title, setTitle] = useState(block?.title || "");
   const [description, setDescription] = useState(block?.description || "");
   const [published, setPublished] = useState(block?.published || false);
-  const [formUrl, setFormUrl] = useState(block?.formUrl || "");
-  const [writtenQuestions, setWrittenQuestions] = useState(block?.writtenQuestions || 1);
   const [file, setFile] = useState(null);
   const [transcript, setTranscript] = useState(block?.transcript || "");
   const [error, setError] = useState("");
-  const assessment = type === "Quiz" || type === "Final exam";
   const existing = block?.type === "Learning material" ? block.resource : null;
   const video = file ? file.type.startsWith("video/") : existing?.kind === "video";
   function submit(event) {
     event.preventDefault();
     if (!title.trim() || !description.trim()) return setError("Enter a title and description.");
-    if (assessment && !isGoogleForm(formUrl.trim())) return setError("Enter an HTTPS Google Forms responder link from docs.google.com/forms/ or forms.gle.");
     if (type === "Learning material") {
       if (!file && !existing) return setError("Choose a PDF or video file.");
       if (file && (!(file.type === "application/pdf" || ["video/mp4", "video/webm"].includes(file.type)) || file.size > 100 * 1024 * 1024 || file.size === 0)) return setError("Choose a nonempty PDF, MP4, or WebM file up to 100 MB.");
       if (video && !transcript.trim()) return setError("Add a text transcript for the video.");
     }
     onSave({ type, title: title.trim(), description: description.trim(), published,
-      formUrl: assessment ? formUrl.trim() : "", writtenQuestions: type === "Final exam" ? Number(writtenQuestions) : 0,
       transcript: type === "Learning material" && video ? transcript.trim() : "",
       resource: type === "Learning material" ? (file ? { url: URL.createObjectURL(file), name: file.name, kind: video ? "video" : "pdf" } : existing) : null,
     });
@@ -35,7 +30,7 @@ export default function BlockEditor({ block, onSave, onClose }) {
     <form onSubmit={submit}>
       <label htmlFor="block-type">Content type</label>
       <select id="block-type" value={type} onChange={e => { setType(e.target.value); setError(""); }}>
-        {["Announcement", "Learning material", "Quiz", "Final exam"].map(value => <option key={value}>{value}</option>)}
+        {["Announcement", "Learning material"].map(value => <option key={value}>{value}</option>)}
       </select>
       <label htmlFor="block-title">Title</label>
       <input id="block-title" value={title} onChange={e => setTitle(e.target.value)} maxLength={150} required />
@@ -47,13 +42,6 @@ export default function BlockEditor({ block, onSave, onClose }) {
         <p id="material-help" className="helper">PDF, MP4, or WebM · Up to 100 MB. Files stay in this browser session and are not uploaded to a server.</p>
         {existing && <p className="helper">Current file: {existing.name}. Choose a file only to replace it.</p>}
         {video && <><label htmlFor="video-transcript">Video transcript</label><textarea id="video-transcript" value={transcript} onChange={e => setTranscript(e.target.value)} rows={5} required /><p className="helper">Include spoken content and important visual information. Use captioned videos and accessible, selectable-text PDFs.</p></>}
-      </>}
-      {assessment && <>
-        <p className="helper">Create the questions in Google Forms, then paste its responder link here. {type === "Quiz" ? "Use multiple-choice questions only." : "Use multiple-choice questions plus 1–3 written-response questions."}</p>
-        <label htmlFor="form-url">Google Forms responder link</label>
-        <input id="form-url" type="url" value={formUrl} onChange={e => setFormUrl(e.target.value)} placeholder="https://forms.gle/…" required />
-        {type === "Final exam" && <><label htmlFor="written-count">Written-response questions in the form</label><select id="written-count" value={writtenQuestions} onChange={e => setWrittenQuestions(e.target.value)}>{[1,2,3].map(n => <option key={n} value={n}>{n}</option>)}</select></>}
-        <p className="helper">Form contents and response permissions must be checked in Google Forms. Scores are not synced to this LMS.</p>
       </>}
       <label className="checkbox-label"><input type="checkbox" checked={published} onChange={e => setPublished(e.target.checked)} />Visible to students</label>
       <p className="helper">Unchecked content stays a draft. Changes reset on refresh or sign out.</p>
