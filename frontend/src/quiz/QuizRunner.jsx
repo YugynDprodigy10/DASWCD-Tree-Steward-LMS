@@ -43,7 +43,7 @@ export default function QuizRunner() {
         if (!current?.published) throw new Error('This quiz is no longer published.');
         if (JSON.stringify(current.questions) !== JSON.stringify(quiz.questions)) throw new Error('The quiz changed. Reopen it from your course before submitting.');
         attempt = { score: quiz.questions.reduce((sum,q) => sum + (q.choices.find(c => c.id === answers[q.id])?.isCorrect ? q.points : 0),0), maxScore: quiz.questions.reduce((sum,q) => sum+q.points,0) };
-        demoSave({ ...current, locked: true });
+        demoSave({ ...current, locked: true, lastScore: { score: attempt.score, maxScore: attempt.maxScore } });
       }
       setResult(attempt);
     } catch(e) { setError(e.message); } finally { setBusy(false); }

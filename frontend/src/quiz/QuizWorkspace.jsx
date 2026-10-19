@@ -27,6 +27,18 @@ function QuestionEditor({ question, onSave, onClose, busy, serverError }) {
   </Modal>;
 }
 
+// Loads the module's quizzes. For students, also loads their latest score on each quiz.
+async function fetchQuizzes(user, moduleId, instructor) {
+  const items = user ? (await quizRequest(user, `/modules/${moduleId}/quizzes`)).quizzes : demoQuizzes().filter(q => q.moduleId === moduleId);
+  const visible = items.filter(q => instructor || q.published);
+  if (instructor || !user) return visible;
+  return Promise.all(visible.map(async q => {
+    const { attempts } = await quizRequest(user, `/quizzes/${q.id}/attempts/me`);
+    const latest = attempts[0];
+    return { ...q, lastScore: latest ? { score: latest.score, maxScore: latest.maxScore } : null };
+  }));
+}
+
 export default function QuizWorkspace({ moduleId, user, instructor, preview, canEdit, allowCreate = false }) {
   const [quizzes, setQuizzes] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -37,16 +49,27 @@ export default function QuizWorkspace({ moduleId, user, instructor, preview, can
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(true);
   async function load() {
-    const items = user ? (await quizRequest(user, `/modules/${moduleId}/quizzes`)).quizzes : demoQuizzes().filter(q => q.moduleId === moduleId);
-    setQuizzes(items.filter(q => instructor || q.published));
+    setQuizzes(await fetchQuizzes(user, moduleId, instructor));
   }
   useEffect(() => {
     let active = true;
     (async () => { try {
-      const items = user ? (await quizRequest(user, `/modules/${moduleId}/quizzes`)).quizzes : demoQuizzes().filter(q => q.moduleId === moduleId);
-      if (active) setQuizzes(items.filter(q => instructor || q.published));
+      const items = await fetchQuizzes(user, moduleId, instructor);
+      if (active) setQuizzes(items);
     } catch(e) { if(active) setError(e.message); } finally { if(active) setLoading(false); } })();
     return () => { active = false; };
+  }, [moduleId, user, instructor]);
+  // Students take quizzes in another tab, so refresh their scores when they come back to this one.
+  useEffect(() => {
+    if (instructor) return;
+    let active = true;
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return;
+      fetchQuizzes(user, moduleId, instructor).then(items => { if (active) setQuizzes(items); }).catch(() => {});
+    };
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => { active = false; window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); };
   }, [moduleId, user, instructor]);
   async function run(action) { setBusy(true); setError(''); setNotice(''); try { await action(); } catch(e) { setError(e.message); } finally { setBusy(false); } }
   async function open(quiz) { await run(async () => { const q = user ? (await quizRequest(user, `/quizzes/${quiz.id}`)).quiz : quiz; setSelected(q); setTitle(q.title); }); }
@@ -74,6 +97,7 @@ export default function QuizWorkspace({ moduleId, user, instructor, preview, can
           <span className="type-tag">{q.published ? 'Published quiz' : 'Draft quiz'}</span>
           <h3>{instructor ? <button className="card-title" disabled={busy} onClick={() => open(q)}>{q.title}</button> : <button className="card-title" onClick={() => launchQuiz(q, user, preview)}>{q.title} ↗<span className="helper"> Opens in a new tab or window</span></button>}</h3>
           <p>{q.questionCount ?? q.questions?.length ?? 0} question{(q.questionCount ?? q.questions?.length ?? 0) === 1 ? "" : "s"} · Multiple choice</p>
+          {!instructor && <p className="quiz-score-line">{q.lastScore ? `Your latest score: ${q.lastScore.score} / ${q.lastScore.maxScore} points${q.lastScore.maxScore > 0 ? ` (${Math.round(q.lastScore.score / q.lastScore.maxScore * 100)}%)` : ''}` : 'Not taken yet'}</p>}
           {instructor && <button className="secondary" disabled={busy} onClick={() => open(q)}>Open builder</button>}
         </article>)}
         {!allowCreate && !quizzes.length && <p>No {instructor ? '' : 'published '}quizzes in this module.</p>}
