@@ -27,7 +27,7 @@ function QuestionEditor({ question, onSave, onClose, busy, serverError }) {
   </Modal>;
 }
 
-export default function QuizWorkspace({ moduleId, user, instructor, preview, canEdit }) {
+export default function QuizWorkspace({ moduleId, user, instructor, preview, canEdit, allowCreate = false }) {
   const [quizzes, setQuizzes] = useState([]);
   const [selected, setSelected] = useState(null);
   const [title, setTitle] = useState('');
@@ -64,23 +64,23 @@ export default function QuizWorkspace({ moduleId, user, instructor, preview, can
   }
   const editable = canEdit && !selected?.published && !selected?.locked;
   return <section className="quiz-workspace" aria-label="Quizzes">
-    <h2>Quizzes</h2>
+    {!allowCreate && <h2>Quizzes</h2>}
     {!user && <p className="helper">Demo quizzes are stored in this browser. No official grades are recorded.</p>}
     {error && <p role="alert" className="notice">{error}</p>}
     {notice && <p role="status">{notice}</p>}
     {loading ? <p role="status">Loading quizzes…</p> : <>
       {!selected && <>
-        {quizzes.map(q => <article className="content-card quiz" key={q.id}>
+        {!allowCreate && quizzes.map(q => <article className="content-card quiz" key={q.id}>
           <span className="type-tag">{q.published ? 'Published quiz' : 'Draft quiz'}</span>
           <h3>{instructor ? <button className="card-title" disabled={busy} onClick={() => open(q)}>{q.title}</button> : <button className="card-title" onClick={() => launchQuiz(q, user, preview)}>{q.title} ↗<span className="helper"> Opens in a new tab or window</span></button>}</h3>
           <p>{q.questionCount ?? q.questions?.length ?? 0} question{(q.questionCount ?? q.questions?.length ?? 0) === 1 ? "" : "s"} · Multiple choice</p>
           {instructor && <button className="secondary" disabled={busy} onClick={() => open(q)}>Open builder</button>}
         </article>)}
-        {!quizzes.length && <p>No {instructor ? '' : 'published '}quizzes in this module.</p>}
-        {canEdit && <form onSubmit={e => { e.preventDefault(); if(!title.trim()) return; run(async () => { const q = user ? (await quizRequest(user, `/modules/${moduleId}/quizzes`, 'POST', { title: title.trim() })).quiz : demoSave({ id: crypto.randomUUID(), moduleId, title: title.trim(), published: false, questions: [] }); setSelected(q); setTitle(q.title); await load(); }); }}>
+        {!allowCreate && !quizzes.length && <p>No {instructor ? '' : 'published '}quizzes in this module.</p>}
+        {canEdit && allowCreate && <form onSubmit={e => { e.preventDefault(); if(!title.trim()) return; run(async () => { const q = user ? (await quizRequest(user, `/modules/${moduleId}/quizzes`, 'POST', { title: title.trim() })).quiz : demoSave({ id: crypto.randomUUID(), moduleId, title: title.trim(), published: false, questions: [] }); setSelected(q); setTitle(q.title); await load(); }); }}>
           <label htmlFor="new-quiz-title">New quiz title</label><input id="new-quiz-title" required maxLength={150} value={title} onChange={e => setTitle(e.target.value)} disabled={busy} /><button className="primary" disabled={busy}>Create draft quiz</button>
         </form>}
-        <button className="text-button" disabled={busy} onClick={() => run(load)}>Refresh quizzes</button>
+        {!allowCreate && <button className="text-button" disabled={busy} onClick={() => run(load)}>Refresh quizzes</button>}
       </>}
       {selected && <>
         <button className="text-button" disabled={busy} onClick={() => { setSelected(null); setTitle(''); }}>← All quizzes</button>

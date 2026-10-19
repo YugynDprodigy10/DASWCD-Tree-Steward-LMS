@@ -130,6 +130,17 @@ test("published quizzes are visible to enrolled students without the answers", a
   assert.equal((await api(`/quizzes/${quizId}`, { as: "outsider" })).status, 404);
 });
 
+test("other instructors can view published quizzes read-only, without the answers", async () => {
+  const list = await api(`/modules/${moduleId}/quizzes`, { as: "otherTeacher" });
+  assert.equal(list.status, 200);
+  assert.equal(list.body.quizzes.length, 1);
+  const view = await api(`/quizzes/${quizId}`, { as: "otherTeacher" });
+  assert.equal(view.status, 200);
+  assert.equal("isCorrect" in view.body.quiz.questions[0].choices[0], false);
+  const edit = await api(`/quizzes/${quizId}`, { as: "otherTeacher", method: "PATCH", body: { title: "Hijacked" } });
+  assert.equal(edit.status, 403);
+});
+
 test("students must answer every question, and the server scores the attempt", async () => {
   const quiz = (await api(`/quizzes/${quizId}`, { as: "teacher" })).body.quiz;
   const [first, second] = quiz.questions;

@@ -36,6 +36,12 @@ async function isEnrolled(user, moduleId, db = pool) {
   return result.rowCount > 0;
 }
 
+// Students enrolled in a module, and every instructor (so they can see how
+// their week fits the course), may view the module's published quizzes.
+async function canViewModule(user, moduleId, db = pool) {
+  return user.isTeacher || isEnrolled(user, moduleId, db);
+}
+
 async function findQuiz(quizId, db = pool) {
   const result = await db.query(
     `SELECT modulePageID, moduleID, quizTitle, published
@@ -174,7 +180,7 @@ router.get("/modules/:moduleId/quizzes", async (req, res) => {
   if (!moduleId) return res.status(404).json({ error: "Module not found." });
 
   const manager = await canManageModule(req.user, moduleId);
-  if (!manager && !(await isEnrolled(req.user, moduleId))) {
+  if (!manager && !(await canViewModule(req.user, moduleId))) {
     return res.status(403).json({ error: "You are not part of this module." });
   }
 
@@ -233,7 +239,7 @@ router.get("/quizzes/:quizId", async (req, res) => {
   if (!quiz) return res.status(404).json({ error: "Quiz not found." });
 
   const manager = await canManageModule(req.user, quiz.moduleid);
-  if (!manager && !(quiz.published && (await isEnrolled(req.user, quiz.moduleid)))) {
+  if (!manager && !(quiz.published && (await canViewModule(req.user, quiz.moduleid)))) {
     return res.status(404).json({ error: "Quiz not found." });
   }
   const questions = await loadQuestions(quizId, manager);

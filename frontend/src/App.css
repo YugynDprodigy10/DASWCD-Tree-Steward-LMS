@@ -992,3 +992,15 @@
 .learning-resource .resource-link { display: inline-block; margin: 8px 12px 8px 0; overflow-wrap: anywhere; }
 .learning-resource .detail-copy { white-space: pre-wrap; }
 .type-tag.final-exam { background: #e8e4f2; color: #514171; }
+
+/* Simple choices on the Create page */
+.create-card.simple {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  cursor: pointer;
+}
+.create-card.simple:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
