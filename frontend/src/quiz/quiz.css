@@ -13,3 +13,11 @@
 .quiz-score { font-size: 28px; font-weight: 650; }
 @media(max-width:500px) { .choice-editor { grid-template-columns:28px minmax(0,1fr); } .choice-editor button { grid-column:2; } .question-card { padding:16px; } .quiz-window { padding:20px 16px; } }
 .quiz-score-line { font-weight: 600; }
+.quiz-workspace button.danger,
+.modal button.danger {
+  color: #fff;
+  background: #a33a2b;
+  border-color: #a33a2b;
+}
+.quiz-workspace button.danger:disabled,
+.modal button.danger:disabled { opacity: 0.6; }

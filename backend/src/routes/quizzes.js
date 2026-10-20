@@ -325,6 +325,31 @@ router.delete("/quizzes/:quizId/questions/:questionId", async (req, res) => {
   res.json({ quiz: describeQuiz(quiz, await loadQuestions(quiz.modulepageid, true)) });
 });
 
+router.delete("/quizzes/:quizId", async (req, res) => {
+  const quiz = await quizForManager(req, res);
+  if (!quiz) return;
+
+  const deleted = await inTransaction(async (client) => {
+    // Lock the quiz so no student can start submitting while it is being deleted.
+    await client.query("SELECT 1 FROM modulePages WHERE modulePageID = $1 FOR UPDATE", [quiz.modulepageid]);
+    if (await hasAttempts(quiz.modulepageid, client)) return false;
+    await client.query(
+      `DELETE FROM quizAnswerChoices
+       WHERE questionID IN (SELECT questionID FROM quizQuestions WHERE modulePageID = $1)`,
+      [quiz.modulepageid],
+    );
+    await client.query("DELETE FROM quizQuestions WHERE modulePageID = $1", [quiz.modulepageid]);
+    await client.query("DELETE FROM modulePages WHERE modulePageID = $1", [quiz.modulepageid]);
+    return true;
+  });
+  if (!deleted) {
+    return res.status(409).json({
+      error: "Students have already taken this quiz, so it can't be deleted. Unpublish it to hide it from students instead.",
+    });
+  }
+  res.json({ deleted: true, id: quiz.modulepageid });
+});
+
 router.post("/quizzes/:quizId/publish", async (req, res) => {
   const quiz = await quizForManager(req, res);
   if (!quiz) return;

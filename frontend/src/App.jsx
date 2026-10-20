@@ -434,6 +434,10 @@ function CourseApp() {
               onCreated={(quiz) => setQuizToOpen(quiz.id)}
               onBack={() => navigate("Create")}
               onDone={() => navigate("Home")}
+              onDeleted={(quiz) => {
+                navigate("Home");
+                setMessage(`Deleted the quiz “${quiz.title}”.`);
+              }}
             />
           )}
           {page === "Home" && (

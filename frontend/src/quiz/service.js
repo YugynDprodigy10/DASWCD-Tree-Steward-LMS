@@ -18,6 +18,9 @@ export function demoSave(quiz) {
   if (index < 0) items.push(quiz); else items[index] = quiz;
   store(items); return quiz;
 }
+export function demoDelete(id) {
+  store(demoQuizzes().filter(q => q.id !== id));
+}
 export function launchQuiz(quiz, user, preview = false) {
   const token = crypto.randomUUID();
   // Prototype identity only, not an authentication token. Never stores a password.

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import Modal from '../components/Modal';
-import { demoQuizzes, demoSave, launchQuiz, quizRequest, questionError } from './service';
+import { demoDelete, demoQuizzes, demoSave, launchQuiz, quizRequest, questionError } from './service';
 import './quiz.css';
 
 function QuestionEditor({ question, onSave, onClose, busy, serverError }) {
@@ -66,10 +66,11 @@ export function QuizCard({ quiz, instructor, user, preview, onOpen }) {
 }
 
 // Creates a new quiz, or edits the quiz with openQuizId.
-export default function QuizWorkspace({ moduleId, user, canEdit, openQuizId = null, onCreated, onBack, onDone }) {
+export default function QuizWorkspace({ moduleId, user, canEdit, openQuizId = null, onCreated, onBack, onDone, onDeleted }) {
   const [selected, setSelected] = useState(null);
   const [title, setTitle] = useState('');
   const [editing, setEditing] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -113,6 +114,22 @@ export default function QuizWorkspace({ moduleId, user, canEdit, openQuizId = nu
       setSelected(q); setTitle(q.title); onCreated?.(q);
     });
   }
+  async function deleteQuiz() {
+    setBusy(true); setError('');
+    try {
+      if (user) await quizRequest(user, `/quizzes/${selected.id}`, 'DELETE');
+      else {
+        if (demoQuizzes().find(q => q.id === selected.id)?.locked) throw new Error('This demo quiz has a submission, so it can’t be deleted. Unpublish it instead.');
+        demoDelete(selected.id);
+      }
+      setConfirmDelete(false);
+      onDeleted?.(selected);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
   const editable = canEdit && !selected?.published && !selected?.locked;
   return <section className="quiz-workspace" aria-label="Quiz builder">
     {!user && <p className="helper">Demo quizzes are stored in this browser. No official grades are recorded.</p>}
@@ -136,9 +153,19 @@ export default function QuizWorkspace({ moduleId, user, canEdit, openQuizId = nu
           {editable && <button disabled={busy} onClick={() => setEditing({ question: null })}>Add question</button>}
           {canEdit && <button className="primary" disabled={busy || (!selected.published && !selected.questions.length)} onClick={() => run(async () => { const next = user ? (await quizRequest(user, `/quizzes/${selected.id}/${selected.published ? 'unpublish' : 'publish'}`, 'POST')).quiz : demoSave({ ...selected, published: !selected.published }); setSelected(next); setNotice(next.published ? 'Quiz published.' : 'Quiz unpublished.'); })}>{selected.published ? 'Unpublish quiz' : 'Publish quiz'}</button>}
           <button disabled={!selected.questions.length} onClick={() => launchQuiz(selected, user, true)}>Preview quiz in new window</button>
+          {canEdit && <button className="danger" disabled={busy} onClick={() => { setError(''); setConfirmDelete(true); }}>Delete quiz</button>}
         </div>
       </>}
     </>}
+    {confirmDelete && <Modal title="Delete this quiz?" onClose={busy ? () => {} : () => setConfirmDelete(false)}>
+      <p>This permanently deletes “{selected.title}” and all of its questions. This can’t be undone.</p>
+      <p className="helper">If students have already taken it, it can’t be deleted. Unpublish it instead to hide it.</p>
+      {error && <p role="alert" className="notice">{error}</p>}
+      <div className="dialog-actions">
+        <button type="button" disabled={busy} onClick={() => setConfirmDelete(false)}>Cancel</button>
+        <button type="button" className="danger" disabled={busy} onClick={deleteQuiz}>{busy ? 'Deleting…' : 'Delete quiz'}</button>
+      </div>
+    </Modal>}
     {editing && <QuestionEditor question={editing.question} onSave={updateQuestion} onClose={() => setEditing(null)} busy={busy} serverError={error} />}
   </section>;
 }
