@@ -78,6 +78,7 @@ test("only the module's instructor can create a quiz, and it starts as a draft",
   assert.equal(created.status, 201);
   assert.equal(created.body.quiz.title, "Native trees");
   assert.equal(created.body.quiz.published, false);
+  assert.ok(Number.isInteger(created.body.quiz.order) && created.body.quiz.order >= 1, "new quizzes report their position in the module");
   quizId = created.body.quiz.id;
 });
 

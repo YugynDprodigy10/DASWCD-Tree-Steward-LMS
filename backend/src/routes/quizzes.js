@@ -44,7 +44,7 @@ async function canViewModule(user, moduleId, db = pool) {
 
 async function findQuiz(quizId, db = pool) {
   const result = await db.query(
-    `SELECT modulePageID, moduleID, quizTitle, published
+    `SELECT modulePageID, moduleID, modulePageOrder, quizTitle, published
      FROM modulePages
      WHERE modulePageID = $1 AND pageType = 'quiz'`,
     [quizId],
@@ -92,6 +92,7 @@ function describeQuiz(quiz, questions) {
     moduleId: quiz.moduleid,
     title: quiz.quiztitle,
     published: quiz.published,
+    order: quiz.modulepageorder,
     totalPoints: questions.reduce((sum, question) => sum + question.points, 0),
     questions,
   };
@@ -185,7 +186,7 @@ router.get("/modules/:moduleId/quizzes", async (req, res) => {
   }
 
   const result = await pool.query(
-    `SELECT p.modulePageID, p.quizTitle, p.published,
+    `SELECT p.modulePageID, p.modulePageOrder, p.quizTitle, p.published,
             COUNT(q.questionID)::int AS questionCount,
             COALESCE(SUM(q.points), 0)::int AS totalPoints
      FROM modulePages p
@@ -200,6 +201,7 @@ router.get("/modules/:moduleId/quizzes", async (req, res) => {
       id: row.modulepageid,
       title: row.quiztitle,
       published: row.published,
+      order: row.modulepageorder,
       questionCount: row.questioncount,
       totalPoints: row.totalpoints,
     })),
@@ -222,7 +224,7 @@ router.post("/modules/:moduleId/quizzes", async (req, res) => {
       `INSERT INTO modulePages (moduleID, modulePageOrder, modulePageTitle, pageType, quizTitle, published)
        SELECT $1, COALESCE(MAX(modulePageOrder), 0) + 1, $2, 'quiz', $2, FALSE
        FROM modulePages WHERE moduleID = $1
-       RETURNING modulePageID, moduleID, quizTitle, published`,
+       RETURNING modulePageID, moduleID, modulePageOrder, quizTitle, published`,
       [moduleId, title],
     );
     return result.rows[0];

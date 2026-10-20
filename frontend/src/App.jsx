@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import Modal from "./components/Modal";
 import BlockEditor from "./components/BlockEditor";
-import QuizWorkspace from "./quiz/QuizWorkspace";
+import QuizWorkspace, { QuizCard } from "./quiz/QuizWorkspace";
+import { useModuleQuizzes } from "./quiz/useModuleQuizzes";
 import QuizRunner from "./quiz/QuizRunner";
 import { resetDemoQuizzes } from "./quiz/service";
 import { initialBlocks, modules } from "./data/course";
@@ -193,16 +194,25 @@ function CourseApp() {
   const [detail, setDetail] = useState(null);
   const [read, setRead] = useState([]);
   const [message, setMessage] = useState("");
+  const [quizToOpen, setQuizToOpen] = useState(null);
   const heading = useRef(null);
   const resourceUrls = useRef(new Set());
   useEffect(() => () => { resourceUrls.current.forEach(url => URL.revokeObjectURL(url)); }, []);
   const isInstructor = role === "instructor" && !preview;
   const canEdit = isInstructor && moduleId === 2;
   const canEditQuiz = isInstructor && (user ? true : moduleId === 2);
+  const { quizzes: moduleQuizzes, error: quizError } = useModuleQuizzes(user, moduleId, isInstructor, Boolean(role) && page === "Home");
   const currentModule = modules.find((item) => item.id === moduleId);
   const shownBlocks = blocks.filter(
     (item) => item.type !== "Quiz" && item.type !== "Final exam" && item.moduleId === moduleId && (isInstructor || item.published),
   );
+  // Content cards and quizzes share one list, sorted by their position in the
+  // module (modulePageOrder in the database). Sample cards have no position yet,
+  // so they come first.
+  const moduleItems = [
+    ...shownBlocks.map((block, index) => ({ key: `block-${block.id}`, block, order: block.order ?? 0, index })),
+    ...moduleQuizzes.map((quiz, index) => ({ key: `quiz-${quiz.id}`, quiz, order: quiz.order ?? 0, index: shownBlocks.length + index })),
+  ].sort((a, b) => a.order - b.order || a.index - b.index);
   useEffect(() => {
     if (role) {
       heading.current?.focus({ preventScroll: true });
@@ -210,6 +220,7 @@ function CourseApp() {
     }
   }, [role, page, moduleId, preview]);
   function navigate(value) {
+    if (value !== "Quizzes") setQuizToOpen(null);
     setPage(value);
     setMessage("");
   }
@@ -234,6 +245,7 @@ function CourseApp() {
     resourceUrls.current.forEach(url => URL.revokeObjectURL(url));
     resourceUrls.current.clear();
     setUser(null);
+    setQuizToOpen(null);
     resetDemoQuizzes();
     setRole(null);
     setPreview(false);
@@ -378,7 +390,7 @@ function CourseApp() {
                   ? `Module ${moduleId}: ${currentModule.title}`
                   : page === "Create"
                     ? "Create content"
-                    : page === "Quizzes" ? "Create a quiz" : page === "Students"
+                    : page === "Quizzes" ? (quizToOpen ? "Quiz builder" : "Create a quiz") : page === "Students"
                       ? "Students"
                       : page === "Gradebook"
                         ? "Course gradebook"
@@ -413,15 +425,34 @@ function CourseApp() {
             </p>
           )}
             {page === "Quizzes" && (
-            <button className="text-button" onClick={() => navigate("Create")}>
-              ← Back to Create
-            </button>
+            <QuizWorkspace
+              key={`${moduleId}-${role}`}
+              moduleId={moduleId}
+              user={user}
+              canEdit={canEditQuiz}
+              openQuizId={quizToOpen}
+              onCreated={(quiz) => setQuizToOpen(quiz.id)}
+              onBack={() => navigate("Create")}
+              onDone={() => navigate("Home")}
+            />
           )}
-          {(page === "Home" || page === "Quizzes") && <QuizWorkspace key={`${moduleId}-${role}-${preview}-${page}`} moduleId={moduleId} user={user} instructor={isInstructor} preview={preview} canEdit={canEditQuiz} allowCreate={page === "Quizzes"} />}
           {page === "Home" && (
             <>
+              {quizError && <p role="alert" className="notice">{quizError}</p>}
               <section className="content-stack" aria-label="Module content">
-                {shownBlocks.map((block) => (
+                {moduleItems.map(({ key, block, quiz }) => quiz ? (
+                  <QuizCard
+                    key={key}
+                    quiz={quiz}
+                    instructor={isInstructor}
+                    user={user}
+                    preview={preview}
+                    onOpen={(item) => {
+                      setQuizToOpen(item.id);
+                      navigate("Quizzes");
+                    }}
+                  />
+                ) : (
                   <article
                     key={block.id}
                     className={`content-card ${block.type.toLowerCase().replaceAll(" ", "-")}`}
@@ -475,7 +506,7 @@ function CourseApp() {
                   </article>
                 ))}
               </section>
-              {shownBlocks.length === 0 && (
+              {moduleItems.length === 0 && (
                 <section className="empty-state">
                   <span aria-hidden="true">✳</span>
                   <h2>
@@ -530,7 +561,10 @@ function CourseApp() {
                     className="create-card simple"
                     key={type}
                     disabled={!ready}
-                    onClick={() => navigate("Quizzes")}
+                    onClick={() => {
+                      setQuizToOpen(null);
+                      navigate("Quizzes");
+                    }}
                   >
                     <h2>{type}</h2>
                     <p>{summary}</p>
