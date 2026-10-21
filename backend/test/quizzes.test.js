@@ -78,6 +78,7 @@ test("only the module's instructor can create a quiz, and it starts as a draft",
   assert.equal(created.status, 201);
   assert.equal(created.body.quiz.title, "Native trees");
   assert.equal(created.body.quiz.published, false);
+  assert.ok(Number.isInteger(created.body.quiz.order) && created.body.quiz.order >= 1, "new quizzes report their position in the module");
   quizId = created.body.quiz.id;
 });
 
@@ -128,6 +129,17 @@ test("published quizzes are visible to enrolled students without the answers", a
     for (const choice of item.choices) assert.equal("isCorrect" in choice, false);
   }
   assert.equal((await api(`/quizzes/${quizId}`, { as: "outsider" })).status, 404);
+});
+
+test("other instructors can view published quizzes read-only, without the answers", async () => {
+  const list = await api(`/modules/${moduleId}/quizzes`, { as: "otherTeacher" });
+  assert.equal(list.status, 200);
+  assert.equal(list.body.quizzes.length, 1);
+  const view = await api(`/quizzes/${quizId}`, { as: "otherTeacher" });
+  assert.equal(view.status, 200);
+  assert.equal("isCorrect" in view.body.quiz.questions[0].choices[0], false);
+  const edit = await api(`/quizzes/${quizId}`, { as: "otherTeacher", method: "PATCH", body: { title: "Hijacked" } });
+  assert.equal(edit.status, 403);
 });
 
 test("students must answer every question, and the server scores the attempt", async () => {

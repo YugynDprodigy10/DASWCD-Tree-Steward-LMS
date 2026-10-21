@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import Modal from "./components/Modal";
 import BlockEditor from "./components/BlockEditor";
-import QuizWorkspace from "./quiz/QuizWorkspace";
+import QuizWorkspace, { QuizCard } from "./quiz/QuizWorkspace";
+import { useModuleQuizzes } from "./quiz/useModuleQuizzes";
 import QuizRunner from "./quiz/QuizRunner";
 import { resetDemoQuizzes } from "./quiz/service";
 import { initialBlocks, modules } from "./data/course";
@@ -193,16 +194,25 @@ function CourseApp() {
   const [detail, setDetail] = useState(null);
   const [read, setRead] = useState([]);
   const [message, setMessage] = useState("");
+  const [quizToOpen, setQuizToOpen] = useState(null);
   const heading = useRef(null);
   const resourceUrls = useRef(new Set());
   useEffect(() => () => { resourceUrls.current.forEach(url => URL.revokeObjectURL(url)); }, []);
   const isInstructor = role === "instructor" && !preview;
   const canEdit = isInstructor && moduleId === 2;
   const canEditQuiz = isInstructor && (user ? true : moduleId === 2);
+  const { quizzes: moduleQuizzes, error: quizError } = useModuleQuizzes(user, moduleId, isInstructor, Boolean(role) && page === "Home");
   const currentModule = modules.find((item) => item.id === moduleId);
   const shownBlocks = blocks.filter(
     (item) => item.type !== "Quiz" && item.type !== "Final exam" && item.moduleId === moduleId && (isInstructor || item.published),
   );
+  // Content cards and quizzes share one list, sorted by their position in the
+  // module (modulePageOrder in the database). Sample cards have no position yet,
+  // so they come first.
+  const moduleItems = [
+    ...shownBlocks.map((block, index) => ({ key: `block-${block.id}`, block, order: block.order ?? 0, index })),
+    ...moduleQuizzes.map((quiz, index) => ({ key: `quiz-${quiz.id}`, quiz, order: quiz.order ?? 0, index: shownBlocks.length + index })),
+  ].sort((a, b) => a.order - b.order || a.index - b.index);
   useEffect(() => {
     if (role) {
       heading.current?.focus({ preventScroll: true });
@@ -210,6 +220,7 @@ function CourseApp() {
     }
   }, [role, page, moduleId, preview]);
   function navigate(value) {
+    if (value !== "Quizzes") setQuizToOpen(null);
     setPage(value);
     setMessage("");
   }
@@ -234,6 +245,7 @@ function CourseApp() {
     resourceUrls.current.forEach(url => URL.revokeObjectURL(url));
     resourceUrls.current.clear();
     setUser(null);
+    setQuizToOpen(null);
     resetDemoQuizzes();
     setRole(null);
     setPreview(false);
@@ -290,8 +302,8 @@ function CourseApp() {
           {navItems.map(([name, icon]) => (
             <button
               key={name}
-              className={page === name ? "nav-item active" : "nav-item"}
-              aria-current={page === name ? "page" : undefined}
+              className={page === name || (name === "Create" && page === "Quizzes") ? "nav-item active" : "nav-item"}
+              aria-current={page === name || (name === "Create" && page === "Quizzes") ? "page" : undefined}
               onClick={() => navigate(name)}
             >
               <span aria-hidden="true">{icon}</span>
@@ -378,7 +390,7 @@ function CourseApp() {
                   ? `Module ${moduleId}: ${currentModule.title}`
                   : page === "Create"
                     ? "Create content"
-                    : page === "Quizzes" ? "Quiz builder" : page === "Students"
+                    : page === "Quizzes" ? (quizToOpen ? "Quiz builder" : "Create a quiz") : page === "Students"
                       ? "Students"
                       : page === "Gradebook"
                         ? "Course gradebook"
@@ -412,11 +424,35 @@ function CourseApp() {
               {message}
             </p>
           )}
-            {(page === "Home" || page === "Quizzes") && <QuizWorkspace key={`${moduleId}-${role}-${preview}`} moduleId={moduleId} user={user} instructor={isInstructor} preview={preview} canEdit={canEditQuiz} />}
+            {page === "Quizzes" && (
+            <QuizWorkspace
+              key={`${moduleId}-${role}`}
+              moduleId={moduleId}
+              user={user}
+              canEdit={canEditQuiz}
+              openQuizId={quizToOpen}
+              onCreated={(quiz) => setQuizToOpen(quiz.id)}
+              onBack={() => navigate("Create")}
+              onDone={() => navigate("Home")}
+            />
+          )}
           {page === "Home" && (
             <>
+              {quizError && <p role="alert" className="notice">{quizError}</p>}
               <section className="content-stack" aria-label="Module content">
-                {shownBlocks.map((block) => (
+                {moduleItems.map(({ key, block, quiz }) => quiz ? (
+                  <QuizCard
+                    key={key}
+                    quiz={quiz}
+                    instructor={isInstructor}
+                    user={user}
+                    preview={preview}
+                    onOpen={(item) => {
+                      setQuizToOpen(item.id);
+                      navigate("Quizzes");
+                    }}
+                  />
+                ) : (
                   <article
                     key={block.id}
                     className={`content-card ${block.type.toLowerCase().replaceAll(" ", "-")}`}
@@ -470,7 +506,7 @@ function CourseApp() {
                   </article>
                 ))}
               </section>
-              {shownBlocks.length === 0 && (
+              {moduleItems.length === 0 && (
                 <section className="empty-state">
                   <span aria-hidden="true">✳</span>
                   <h2>
@@ -485,10 +521,10 @@ function CourseApp() {
                   </p>
                 </section>
               )}
-              {canEdit && (
+              {(canEdit || canEditQuiz) && (
                 <button
                   className="add-block"
-                  onClick={() => setEditor({ block: null })}
+                  onClick={() => navigate("Create")}
                 >
                   <span aria-hidden="true">+</span> Add content block
                 </button>
@@ -512,42 +548,32 @@ function CourseApp() {
             </>
           )}
           {page === "Create" && (
-            <section className="create-grid">
-              {["Announcement", "Learning material", "Quiz", "Final exam"].map((type) => (
-                <button
-                  className="create-card"
-                  key={type}
-                  disabled={type === "Final exam" || (type === "Quiz" ? !canEditQuiz : !canEdit)}
-                  onClick={() =>
-                    type === "Quiz" ? navigate("Quizzes") :
-                    setEditor({
-                      block: {
-                        type,
-                        title: "",
-                        description: "",
-                        published: false,
-                      },
-                    })
-                  }
-                >
-                  <span className={`type-tag ${type.toLowerCase().replaceAll(" ", "-")}`}>
-                    {type}
-                  </span>
-                  <h2>
-                    {type === "Announcement"
-                      ? "Share an update"
-                      : type === "Quiz"
-                        ? "Build a multiple-choice quiz"
-                        : type === "Final exam" ? "Final exam — coming next" : "Upload a PDF or video"}
-                  </h2>
-                  <p>
-                    {type === "Announcement"
-                      ? "Keep everyone informed about this week."
-                      : type === "Learning material" ? "Share course reading or a video lesson." : type === "Quiz" ? "Add questions, choose correct answers, and publish." : "Written-response grading needs backend support."}
-                  </p>
-                  <span className="text-button">Create block →</span>
-                </button>
-              ))}
+            <section className="create-grid" aria-label="Choose what to create">
+              {[
+                ["Announcement", "Share an update"],
+                ["Learning material", "Upload a PDF or video"],
+                ["Quiz", "Multiple-choice questions"],
+                ["Final exam", "End-of-course exam"],
+              ].map(([type, summary]) => {
+                const ready = type === "Quiz" && canEditQuiz;
+                return (
+                  <button
+                    className="create-card simple"
+                    key={type}
+                    disabled={!ready}
+                    onClick={() => {
+                      setQuizToOpen(null);
+                      navigate("Quizzes");
+                    }}
+                  >
+                    <h2>{type}</h2>
+                    <p>{summary}</p>
+                    <span className={ready ? "text-button" : "helper"}>
+                      {ready ? "Create →" : type === "Quiz" ? "Not available in this module" : "Coming soon"}
+                    </span>
+                  </button>
+                );
+              })}
             </section>
           )}
           {(page === "Students" || page === "Gradebook") && (

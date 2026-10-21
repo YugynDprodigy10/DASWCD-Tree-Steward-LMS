@@ -36,9 +36,15 @@ async function isEnrolled(user, moduleId, db = pool) {
   return result.rowCount > 0;
 }
 
+// Students enrolled in a module, and every instructor (so they can see how
+// their week fits the course), may view the module's published quizzes.
+async function canViewModule(user, moduleId, db = pool) {
+  return user.isTeacher || isEnrolled(user, moduleId, db);
+}
+
 async function findQuiz(quizId, db = pool) {
   const result = await db.query(
-    `SELECT modulePageID, moduleID, quizTitle, published
+    `SELECT modulePageID, moduleID, modulePageOrder, quizTitle, published
      FROM modulePages
      WHERE modulePageID = $1 AND pageType = 'quiz'`,
     [quizId],
@@ -86,6 +92,7 @@ function describeQuiz(quiz, questions) {
     moduleId: quiz.moduleid,
     title: quiz.quiztitle,
     published: quiz.published,
+    order: quiz.modulepageorder,
     totalPoints: questions.reduce((sum, question) => sum + question.points, 0),
     questions,
   };
@@ -174,12 +181,12 @@ router.get("/modules/:moduleId/quizzes", async (req, res) => {
   if (!moduleId) return res.status(404).json({ error: "Module not found." });
 
   const manager = await canManageModule(req.user, moduleId);
-  if (!manager && !(await isEnrolled(req.user, moduleId))) {
+  if (!manager && !(await canViewModule(req.user, moduleId))) {
     return res.status(403).json({ error: "You are not part of this module." });
   }
 
   const result = await pool.query(
-    `SELECT p.modulePageID, p.quizTitle, p.published,
+    `SELECT p.modulePageID, p.modulePageOrder, p.quizTitle, p.published,
             COUNT(q.questionID)::int AS questionCount,
             COALESCE(SUM(q.points), 0)::int AS totalPoints
      FROM modulePages p
@@ -194,6 +201,7 @@ router.get("/modules/:moduleId/quizzes", async (req, res) => {
       id: row.modulepageid,
       title: row.quiztitle,
       published: row.published,
+      order: row.modulepageorder,
       questionCount: row.questioncount,
       totalPoints: row.totalpoints,
     })),
@@ -216,7 +224,7 @@ router.post("/modules/:moduleId/quizzes", async (req, res) => {
       `INSERT INTO modulePages (moduleID, modulePageOrder, modulePageTitle, pageType, quizTitle, published)
        SELECT $1, COALESCE(MAX(modulePageOrder), 0) + 1, $2, 'quiz', $2, FALSE
        FROM modulePages WHERE moduleID = $1
-       RETURNING modulePageID, moduleID, quizTitle, published`,
+       RETURNING modulePageID, moduleID, modulePageOrder, quizTitle, published`,
       [moduleId, title],
     );
     return result.rows[0];
@@ -233,7 +241,7 @@ router.get("/quizzes/:quizId", async (req, res) => {
   if (!quiz) return res.status(404).json({ error: "Quiz not found." });
 
   const manager = await canManageModule(req.user, quiz.moduleid);
-  if (!manager && !(quiz.published && (await isEnrolled(req.user, quiz.moduleid)))) {
+  if (!manager && !(quiz.published && (await canViewModule(req.user, quiz.moduleid)))) {
     return res.status(404).json({ error: "Quiz not found." });
   }
   const questions = await loadQuestions(quizId, manager);
