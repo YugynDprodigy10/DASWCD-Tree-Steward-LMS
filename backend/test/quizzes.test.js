@@ -177,3 +177,26 @@ test("questions are locked once a student has taken the quiz", async () => {
   const locked = await api(`/quizzes/${quizId}/questions`, { as: "teacher", method: "POST", body: question("Late", 1, 0) });
   assert.equal(locked.status, 409);
 });
+
+test("a quiz students have taken can't be deleted, so their scores are kept", async () => {
+  const refused = await api(`/quizzes/${quizId}`, { as: "teacher", method: "DELETE" });
+  assert.equal(refused.status, 409);
+  assert.equal((await api(`/quizzes/${quizId}`, { as: "teacher" })).status, 200);
+});
+
+test("only the module's instructor can delete an untaken quiz, and it is fully removed", async () => {
+  const created = await api(`/modules/${moduleId}/quizzes`, { as: "teacher", method: "POST", body: { title: "Disposable" } });
+  const id = created.body.quiz.id;
+  await api(`/quizzes/${id}/questions`, { as: "teacher", method: "POST", body: question("Gone soon", 1, 0) });
+
+  assert.equal((await api(`/quizzes/${id}`, { as: "otherTeacher", method: "DELETE" })).status, 403);
+  assert.equal((await api(`/quizzes/${id}`, { as: "student", method: "DELETE" })).status, 403);
+
+  const deleted = await api(`/quizzes/${id}`, { as: "teacher", method: "DELETE" });
+  assert.equal(deleted.status, 200);
+  assert.equal((await api(`/quizzes/${id}`, { as: "teacher" })).status, 404);
+  const list = await api(`/modules/${moduleId}/quizzes`, { as: "teacher" });
+  assert.equal(list.body.quizzes.some((quiz) => quiz.id === id), false);
+  const leftovers = await pool.query("SELECT 1 FROM quizQuestions WHERE modulePageID = $1", [id]);
+  assert.equal(leftovers.rowCount, 0);
+});
