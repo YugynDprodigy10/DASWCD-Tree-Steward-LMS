@@ -12,7 +12,7 @@ The backend must enforce permissions; hiding a button in React is not access con
 
 ## Current status
 
-The React prototype includes a matching login design, student and instructor demo views, a responsive card layout, and navigation across 12 sample modules. Instructors can add/edit cards in their sample assigned module (Week 2), keep cards as drafts, and preview the student view on desktop or mobile. Students see published cards without instructor controls and can mark announcements as read. All sample changes reset on refresh or sign out. Prototype sign-in checks the development test users and their database roles, but stores plaintext test passwords and does not create a secure session or protect API routes. Never use real account credentials with it. Persistent course content, quiz authoring/attempts, submissions, enrollment, grades, admin tools, and messaging are not connected.
+The React prototype includes a matching login design, student and instructor demo views, a responsive card layout, and navigation across 12 sample modules. Instructors can add/edit cards in their sample assigned module (Week 2), keep cards as drafts, and preview the student view on desktop or mobile. Students see published cards without instructor controls and can mark announcements as read. Course-card changes reset on refresh or sign out; demo quizzes persist in this browser until sign-out so they can open in a separate window. Prototype sign-in checks the development test users and their database roles, but stores plaintext test passwords and does not create a secure session or protect API routes. Never use real account credentials with it. Persistent course content, enrollment, overall grades, admin tools, and messaging are not connected. Built-in quizzes can use the separate quiz API described below.
 
 [View the shared frontend preview](https://elegant-fox-d4ee0f.netlify.app). This is currently a manual deployment and may lag behind this repository.
 
@@ -81,6 +81,20 @@ To create the test users, run `npm run query` in `backend`. Then sign in with `t
 
 ## Try the interface
 
+### Administrator and account-recovery preview
+
+Choose **Administrator demo** on the login screen to explore the single-class admin workspace. It includes an overview, a searchable People directory, role/module assignments, invitations, and illustrative student progress.
+
+- **Invite person** creates a sample pending invitation. Duplicate account/pending-invitation emails are rejected without regard to capitalization.
+- In **Invitations**, copy a clearly labeled sample link, preview sending/acceptance, revoke, or renew expired/revoked invitations. Completing sample acceptance adds the person to the local directory.
+- In **People**, change an email while retaining the same account and progress, add a sample person, assign student/instructor/administrator roles with confirmation for administrator access, remove/restore people, request a sample password reset, or deactivate/reactivate an account.
+- In **Modules**, add/edit module details, independently toggle student and instructor visibility, preview each audience catalog, and select active assigned instructors. New modules start hidden from both audiences. Inactive instructors retain their assignments but are not displayed as active module instructors.
+- **Forgot password?** on the login page previews the request and reset screens. Use made-up credentials only. Passwords are not sent or saved.
+
+These workflows use in-memory sample data and reset on refresh or sign out. They do not send email, generate usable invitation/reset links, authenticate users, or modify real accounts. The existing API health check remains separate. Backend integration must provide invitation/reset token validation and expiration, authenticated role enforcement, and email updates tied to stable user IDs. Module visibility currently affects the admin catalog preview, not the separate student/instructor demo routes. Multiple simultaneous classes are outside this preview.
+
+### Student and instructor preview
+
 Choose **Student demo** or **Instructor demo** on the login screen; no credentials are needed. The sign-in form is a design preview and does not authenticate.
 
 - In the instructor demo, add a block in Week 2. Leave **Visible in student demo** unchecked to create a draft.
@@ -131,3 +145,19 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before starting a branch. Open a pull re
 The **Frontend CI** workflow runs dependency installation, ESLint, and the production build for every PR targeting `main` and every push to `main`. It checks the frontend and its Node utilities; it does not yet test the backend or database, and it does not deploy to Netlify.
 
 Repository admins should follow [GitHub setup](docs/github-setup.md) to enable branch protection. Adding a workflow file alone does not prevent direct pushes or failed merges.
+
+## Built-in quizzes
+
+Google Forms links have been replaced with a native multiple-choice builder. In Instructor demo, open Create → Quiz or use the Quizzes section in a module. Create a draft, add questions with 2–6 choices and exactly one correct answer, assign 1–100 points, and publish. Published questions are read-only until unpublished; the API rejects question changes after submissions.
+
+Student quiz titles open a separate tab/window (browser preferences decide which). Radio-button groups support keyboard navigation, unanswered questions block submission, and successful submissions show the score. Instructor previews never submit attempts. Quiz windows expire after two hours; signing out invalidates their launch context.
+
+Demo quizzes use browser-local storage and local practice scoring; they are cleared on sign-out. They are not official grades. Signed-in accounts use PR #12's API without falling back to sample data. Run the merged backend and its migrations before using signed-in quiz flows. The adapter uses the login-returned user ID and the API's temporary `X-User-Id` header; real session authentication remains required before deployment. The API decides module permissions; live accounts are not hardcoded to Week 2 for quiz operations.
+
+Final exams with written answers remain disabled until the backend supports them. Weighted course grades and retake/answer-release policy are separate work. Native quiz questions are no longer edited through the announcement/material dialog.
+
+Validation: `node --test frontend/test/quiz.test.js`, frontend lint/build, and browser checks for draft creation, required correct answer, publication, student visibility, separate-window launch, preview-only completion, required student answers, and demo scoring. The HTTP adapter tests mock responses; they do not constitute a live database integration test.
+
+### Integration verification (2026-10-16)
+
+After merging main, both migrations and the seed queries ran successfully on an isolated local PostgreSQL 14 cluster without Docker. All 9 backend API tests, 2 frontend adapter/validation tests, frontend lint, and the production build passed. The browser flow verified development instructor login, draft/question creation, publishing, student login, opening a quiz in a separate window, and a submitted server score matching the persisted database record. Docker/PostgreSQL 18 remains unverified. The temporary X-User-Id authentication and quiz API review limitations still apply; passing these tests is not production security approval.

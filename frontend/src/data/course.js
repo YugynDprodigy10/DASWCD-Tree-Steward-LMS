@@ -15,16 +15,6 @@ export const modules = [
 
 export const initialBlocks = [
   {
-    id: "quiz-2",
-    moduleId: 2,
-    type: "Quiz",
-    title: "Native species ID quiz",
-    description:
-      "Review the identifying features of trees in our desert landscape.",
-    published: true,
-    detail: "Sample quiz · Questions are not available yet",
-  },
-  {
     id: "announcement-2",
     moduleId: 2,
     type: "Announcement",
@@ -34,12 +24,12 @@ export const initialBlocks = [
     published: true,
   },
   {
-    id: "assignment-2",
+    id: "material-2",
     moduleId: 2,
-    type: "Assignment",
-    title: "Tree health assessment report",
+    type: "Learning material",
+    title: "Tree health field guide",
     description:
-      "Choose a tree in your neighborhood. Record what you notice about its leaves, trunk, and surrounding soil. Bring your observations and questions to class.",
+      "Read the field guide or watch a lesson on identifying signs of tree health. Your instructor will attach the learning material here.",
     published: true,
     detail: "Sample assignment · No due date set",
   },

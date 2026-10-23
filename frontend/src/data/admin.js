@@ -1,0 +1,50 @@
+export const initialPeople = [
+  {
+    id: "person-1",
+    name: "Jordan Ellis",
+    email: "jordan@example.com",
+    role: "Student",
+    status: "Active",
+    modules: [],
+    completed: 3,
+    joined: "Sample enrollment · Week 1",
+  },
+  {
+    id: "person-2",
+    name: "Morgan Lee",
+    email: "morgan@example.com",
+    role: "Instructor",
+    status: "Active",
+    modules: [2, 3],
+    completed: 0,
+    joined: "Sample enrollment · Week 1",
+  },
+  {
+    id: "person-3",
+    name: "Sam Rivera",
+    email: "sam@example.com",
+    role: "Student",
+    status: "Inactive",
+    modules: [],
+    completed: 1,
+    joined: "Sample enrollment · Week 1",
+  },
+];
+export const initialInvitations = [
+  {
+    id: "invite-1",
+    name: "Alex Park",
+    email: "alex@example.com",
+    role: "Student",
+    modules: [],
+    status: "Pending",
+  },
+  {
+    id: "invite-2",
+    name: "Taylor Reed",
+    email: "taylor@example.com",
+    role: "Instructor",
+    modules: [4],
+    status: "Expired",
+  },
+];
