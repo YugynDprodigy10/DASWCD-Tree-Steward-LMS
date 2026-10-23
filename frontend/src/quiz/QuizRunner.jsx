@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { demoQuizzes, demoSave, launchContext, quizRequest } from './service';
 import './quiz.css';
 
-export default function QuizRunner() {
+export default function QuizRunner({ getAccessTokenSilently }) {
   const [context] = useState(launchContext);
   const [quiz, setQuiz] = useState(null);
   const [answers, setAnswers] = useState({});
@@ -12,17 +12,24 @@ export default function QuizRunner() {
   const [loading, setLoading] = useState(true);
   const [retry, setRetry] = useState(0);
   const resultHeading = useRef(null);
+  const apiUser = context?.user && getAccessTokenSilently
+    ? { ...context.user, getAccessTokenSilently }
+    : null;
   useEffect(() => {
     let active = true;
     (async () => { try {
       if (!context) throw new Error('This quiz window has expired. Open the quiz again from your course.');
-      const q = context.user ? (await quizRequest(context.user, `/quizzes/${context.quizId}`)).quiz : demoQuizzes().find(q => q.id === context.quizId);
+      const quizUser = context.user && getAccessTokenSilently
+        ? { ...context.user, getAccessTokenSilently }
+        : null;
+      if (context.user && !quizUser) throw new Error('Sign in again to open this quiz.');
+      const q = quizUser ? (await quizRequest(quizUser, `/quizzes/${context.quizId}`)).quiz : demoQuizzes().find(q => q.id === context.quizId);
       if (!q || (!q.published && !context.preview)) throw new Error('This quiz is not currently published.');
       if (!q.questions.length) throw new Error('This quiz has no questions yet.');
       if (active) setQuiz(q);
     } catch(e) { if(active) setError(e.message); } finally { if(active) setLoading(false); } })();
     return () => { active = false; };
-  }, [context, retry]);
+  }, [context, retry, getAccessTokenSilently]);
   useEffect(() => { if(result) resultHeading.current?.focus(); }, [result]);
   useEffect(() => {
     const warn = e => { e.preventDefault(); e.returnValue = ''; };
@@ -37,7 +44,7 @@ export default function QuizRunner() {
       if (quiz.questions.some(q => !answers[q.id])) throw new Error('Answer every question before submitting.');
       if (context.preview) { setResult({ preview: true }); return; }
       let attempt;
-      if (context.user) attempt = (await quizRequest(context.user, `/quizzes/${quiz.id}/attempts`, 'POST', { answers: quiz.questions.map(q => ({ questionId: q.id, choiceId: Number(answers[q.id]) })) })).attempt;
+      if (apiUser) attempt = (await quizRequest(apiUser, `/quizzes/${quiz.id}/attempts`, 'POST', { answers: quiz.questions.map(q => ({ questionId: q.id, choiceId: Number(answers[q.id]) })) })).attempt;
       else {
         const current = demoQuizzes().find(q => q.id === quiz.id);
         if (!current?.published) throw new Error('This quiz is no longer published.');

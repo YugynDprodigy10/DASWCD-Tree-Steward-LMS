@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Modal from "./components/Modal";
 import BlockEditor from "./components/BlockEditor";
 import QuizWorkspace, { QuizCard } from "./quiz/QuizWorkspace";
@@ -9,7 +9,6 @@ import { initialBlocks, modules } from "./data/course";
 import "./App.css";
 import ApiStatus from "./components/ApiStatus";
 import AdminWorkspace from "./components/AdminWorkspace";
-import AccountRecovery from "./components/AccountRecovery";
 
 function Brand() {
   return (
@@ -30,42 +29,26 @@ function Brand() {
   );
 }
 
-function Login({ onDemo, onLogin }) {
-  const [recovery, setRecovery] = useState(false); //onLogin tells the app that the user has successfully logged in and provides the user data to the app.
-  const [showPassword, setShowPassword] = useState(false);
-  const [message, setMessage] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  //all of these const values track your email and password input
+function Login({ onDemo, auth0, message, isResolving }) {
+  const [loginError, setLoginError] = useState("");
 
-  async function submitLogin(event) {
-    //When there's an email and password, this function sends a request to the backend with the email and password. If the response is successful, it calls onLogin with the user data. If there's an error, it sets the message state to display the error message.
-    event.preventDefault();
-    setMessage("");
-    setIsSubmitting(true);
-
+  async function signIn() {
+    setLoginError("");
     try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || "Unable to sign in.");
-      }
-
-      onLogin(result.user);
+      await auth0.login();
     } catch (error) {
-      setMessage(error.message || "Unable to sign in.");
-    } finally {
-      setIsSubmitting(false);
+      setLoginError(error.message || "Unable to start sign-in.");
     }
   }
 
-  if (recovery) return <AccountRecovery onBack={() => setRecovery(false)} />;
+  async function signOut() {
+    try {
+      await auth0.logout();
+    } catch (error) {
+      setLoginError(error.message || "Unable to sign out.");
+    }
+  }
+
   return (
     <div className="login-page">
       <a className="skip-link" href="#login-main">Skip to sign in</a>
@@ -93,66 +76,34 @@ function Login({ onDemo, onLogin }) {
         <section className="login-card" id="login-main" tabIndex={-1}>
           <span className="eyebrow">YOUR LEARNING SPACE</span>
           <h2>Welcome back.</h2>
-          <p className="muted">Sign in to continue your stewardship journey.</p>
-          <form onSubmit={submitLogin}>
-            <label htmlFor="email">Email address</label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="username"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              required
-            />
-            <label htmlFor="password">Password</label>
-            <div className="password-field">
-              <input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                autoComplete="current-password"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                aria-pressed={showPassword}
-              >
-                {showPassword ? "Hide" : "Show"}
-              </button>
-            </div>
-            <p className="login-help">
-              Prototype sign-in only. Do not use a real account password.
-            </p>
-            <button
-              type="button"
-              className="text-button"
-              onClick={() => setRecovery(true)}
-            >
-              Forgot password?
-            </button>
+          <p className="muted">Sign in securely to continue your stewardship journey.</p>
+          {auth0?.configured ? (
             <button
               className="primary full"
-              type="submit"
-              disabled={isSubmitting}
+              type="button"
+              onClick={signIn}
+              disabled={auth0.isLoading || isResolving || auth0.isAuthenticated}
             >
-              {isSubmitting ? "Signing in…" : "Sign in"}{" "}
+              {auth0.isLoading || isResolving ? "Checking sign-in…" : "Continue with Auth0"}{" "}
               <span aria-hidden="true">→</span>
             </button>
-          </form>
-          {message && (
-            <p className="notice" role="alert">
-              {message}
+          ) : (
+            <p className="notice" role="status">
+              Auth0 is not configured. Add the frontend settings described in the README to enable sign-in.
             </p>
+          )}
+          {(loginError || message || auth0?.error) && (
+            <p className="notice" role="alert">
+              {loginError || message || auth0.error}
+            </p>
+          )}
+          {auth0?.isAuthenticated && (
+            <button className="text-button" onClick={signOut}>Sign out of Auth0</button>
           )}
           <div className="demo-section">
             <span className="demo-label">EXPLORE THE PROTOTYPE</span>
             <p>
-              Prototype accounts use test credentials. Sample changes reset on
-              refresh.
+              These local demos are separate from Auth0 accounts. Sample changes reset on refresh.
             </p>
             <div className="demo-buttons">
               <button className="secondary" onClick={() => onDemo("student")}>
@@ -179,13 +130,16 @@ function Login({ onDemo, onLogin }) {
   );
 }
 
-export default function App() {
-  return new URLSearchParams(window.location.search).has("quiz") ? <QuizRunner /> : <CourseApp />;
+export default function App({ auth0 = null }) {
+  return new URLSearchParams(window.location.search).has("quiz")
+    ? <QuizRunner getAccessTokenSilently={auth0?.getAccessTokenSilently} />
+    : <CourseApp auth0={auth0} />;
 }
 
-function CourseApp() {
+function CourseApp({ auth0 }) {
   const [user, setUser] = useState(null);
   const [role, setRole] = useState(null);
+  const [authMessage, setAuthMessage] = useState("");
   const [preview, setPreview] = useState(false);
   const [moduleId, setModuleId] = useState(2);
   const [page, setPage] = useState("Home");
@@ -197,6 +151,10 @@ function CourseApp() {
   const [quizToOpen, setQuizToOpen] = useState(null);
   const heading = useRef(null);
   const resourceUrls = useRef(new Set());
+  const isAuthenticated = auth0?.isAuthenticated;
+  const authSubject = auth0?.profile?.sub;
+  const getAccessTokenSilently = auth0?.getAccessTokenSilently;
+  const isResolvingAccount = Boolean(isAuthenticated && !user && !authMessage);
   useEffect(() => () => { resourceUrls.current.forEach(url => URL.revokeObjectURL(url)); }, []);
   const isInstructor = role === "instructor" && !preview;
   const canEdit = isInstructor && moduleId === 2;
@@ -224,23 +182,52 @@ function CourseApp() {
     setPage(value);
     setMessage("");
   }
-  function enterView(value) {
+  const enterView = useCallback((value) => {
     setRole(value);
     setPage("Home");
     setPreview(false);
     setModuleId(2);
     setMessage("");
-  }
-  function enterLogin(user) {
-    //takes a result from the backend and uses it to decide what to display the user based on their role type.
-    const role = user.roles.includes("teacher")
+  }, []);
+  const enterLogin = useCallback((nextUser) => {
+    const nextRole = nextUser.roles.includes("teacher")
       ? "instructor"
-      : user.roles.includes("student")
+      : nextUser.roles.includes("student")
         ? "student"
         : "administrator";
-    setUser(user);
-    enterView(role);
-  }
+    setUser(nextUser);
+    enterView(nextRole);
+  }, [enterView]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !authSubject || !getAccessTokenSilently) return undefined;
+    let active = true;
+    (async () => {
+      try {
+        const token = await getAccessTokenSilently();
+        const response = await fetch("/api/auth/me", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const result = await response.json().catch(() => null);
+        if (!response.ok || !result?.user) {
+          throw new Error(result?.error || "Unable to load your LMS account.");
+        }
+        if (!Array.isArray(result.user.roles) || result.user.roles.length === 0) {
+          throw new Error("This LMS account has no assigned role.");
+        }
+        if (active) {
+          enterLogin({
+            ...result.user,
+            getAccessTokenSilently,
+          });
+        }
+      } catch (error) {
+        if (active) setAuthMessage(error.message || "Unable to load your LMS account.");
+      }
+    })();
+    return () => { active = false; };
+  }, [isAuthenticated, authSubject, getAccessTokenSilently, enterLogin]);
+
   function leaveDemo() {
     resourceUrls.current.forEach(url => URL.revokeObjectURL(url));
     resourceUrls.current.clear();
@@ -254,6 +241,12 @@ function CourseApp() {
     setBlocks(initialBlocks);
     setRead([]);
     setMessage("");
+    setAuthMessage("");
+    if (auth0?.isAuthenticated) {
+      auth0.logout().catch((error) => {
+        setAuthMessage(error.message || "Unable to sign out.");
+      });
+    }
   }
   function saveBlock(values) {
     if (!canEdit) return;
@@ -274,7 +267,14 @@ function CourseApp() {
     setEditor(null);
     setMessage("Content block saved for this demo session.");
   }
-  if (!role) return <Login onDemo={enterView} onLogin={enterLogin} />;
+  if (!role) return (
+    <Login
+      onDemo={enterView}
+      auth0={auth0}
+      message={authMessage}
+      isResolving={isResolvingAccount}
+    />
+  );
   if (role === "admin" || role === "administrator") return <AdminWorkspace brand={<Brand />} onExit={leaveDemo} />;
   const navItems = isInstructor
     ? [
@@ -313,10 +313,10 @@ function CourseApp() {
         </nav>
         <div className="sidebar-bottom">
           <span className="user-role">
-            {isInstructor ? "Instructor" : "Student"} sample view
+            {user ? user.email : `${isInstructor ? "Instructor" : "Student"} sample view`}
           </span>
           <button className="text-button" onClick={leaveDemo}>
-            Back to sign in →
+            {user ? "Sign out →" : "Back to sign in →"}
           </button>
         </div>
       </aside>
@@ -326,7 +326,7 @@ function CourseApp() {
             Tree Steward Program <span className="slash">/</span> {page}
           </span>
           <div className="topbar-actions">
-            <span className="demo-badge">Demo workspace</span>
+            <span className="demo-badge">{user ? "Signed in" : "Demo workspace"}</span>
             <button className="text-button mobile-signout" onClick={leaveDemo}>
               Sign out
             </button>

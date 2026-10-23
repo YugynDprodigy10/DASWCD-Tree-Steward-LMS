@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
     userID SERIAL PRIMARY KEY,
     username TEXT NOT NULL UNIQUE,
     email TEXT NOT NULL UNIQUE,
-    passwordTemp TEXT NOT NULL,
+    passwordTemp TEXT,
     student BOOLEAN NOT NULL DEFAULT FALSE,
     teacher BOOLEAN NOT NULL DEFAULT FALSE,
     administrator BOOLEAN NOT NULL DEFAULT FALSE

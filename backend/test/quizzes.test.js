@@ -3,27 +3,58 @@
 // with unique names and deletes them afterwards.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import app from "../src/app.js";
-import pool from "../src/db/pool.js";
+import { createServer as createHttpServer } from "node:http";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 
 const tag = `quiztest-${Date.now()}`;
+const { privateKey, publicKey } = await generateKeyPair("RS256");
+const jwks = { ...(await exportJWK(publicKey)), kid: "quiz-test-key", alg: "RS256", use: "sig" };
+const jwksServer = createHttpServer((req, res) => {
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ keys: [jwks] }));
+});
+await new Promise((resolve) => jwksServer.listen(0, "127.0.0.1", resolve));
+process.env.AUTH0_DOMAIN = "steward-test.auth0.local";
+process.env.AUTH0_AUDIENCE = "https://steward-tree.test/api";
+process.env.NODE_ENV = "test";
+process.env.AUTH0_JWKS_URI = `http://127.0.0.1:${jwksServer.address().port}/.well-known/jwks.json`;
+const { default: app } = await import("../src/app.js");
+const { default: pool } = await import("../src/db/pool.js");
 let server;
 let baseUrl;
 let moduleId;
 const users = {};
+const emails = {};
 
 async function makeUser(name, roles) {
+  const email = `${tag}-${name}@example.com`;
   const result = await pool.query(
-    `INSERT INTO users (username, email, passwordTemp, student, teacher, administrator)
-     VALUES ($1, $2, 'not-used', $3, $4, FALSE) RETURNING userID`,
-    [`${tag}-${name}`, `${tag}-${name}@example.com`, roles.student ?? false, roles.teacher ?? false],
+    `INSERT INTO users (username, email, student, teacher, administrator)
+     VALUES ($1, $2, $3, $4, FALSE) RETURNING userID`,
+    [`${tag}-${name}`, email, roles.student ?? false, roles.teacher ?? false],
   );
+  emails[name] = email;
   return result.rows[0].userid;
 }
 
-function api(path, { as, method = "GET", body } = {}) {
+async function api(path, { as, method = "GET", body, tokenClaims } = {}) {
   const headers = { "Content-Type": "application/json" };
-  if (as) headers["X-User-Id"] = String(users[as]);
+  if (as) {
+    const email = emails[as];
+    const token = await new SignJWT({
+      "https://stewardtree.app/claims/email": email,
+      "https://stewardtree.app/claims/email_verified": true,
+      ...tokenClaims,
+    })
+      .setProtectedHeader({ alg: "RS256", kid: jwks.kid })
+      .setIssuer("https://steward-test.auth0.local/")
+      .setAudience(process.env.AUTH0_AUDIENCE)
+      .setSubject(`auth0|${users[as]}`)
+      .setIssuedAt()
+      .setExpirationTime("5m")
+      .sign(privateKey);
+    headers.Authorization = `Bearer ${token}`;
+  }
   return fetch(`${baseUrl}/api${path}`, { method, headers, body: body && JSON.stringify(body) })
     .then(async (response) => ({ status: response.status, body: await response.json() }));
 }
@@ -38,7 +69,7 @@ before(async () => {
   const moduleRow = await pool.query("INSERT INTO modules (name) VALUES ($1) RETURNING moduleID", [tag]);
   moduleId = moduleRow.rows[0].moduleid;
   users.teacher = await makeUser("teacher", { teacher: true });
-  users.otherTeacher = await makeUser("other-teacher", { teacher: true });
+  users.otherTeacher = await makeUser("otherTeacher", { teacher: true });
   users.student = await makeUser("student", { student: true });
   users.outsider = await makeUser("outsider", { student: true });
   await pool.query("INSERT INTO moduleTeachers (moduleID, userID) VALUES ($1, $2)", [moduleId, users.teacher]);
@@ -49,7 +80,8 @@ before(async () => {
 });
 
 after(async () => {
-  server?.close();
+  await new Promise((resolve) => server?.close(resolve) ?? resolve());
+  await new Promise((resolve) => jwksServer.close(resolve));
   const ids = Object.values(users);
   await pool.query("DELETE FROM quizAttemptAnswers WHERE modulePageID IN (SELECT modulePageID FROM modulePages WHERE moduleID = $1)", [moduleId]);
   await pool.query("DELETE FROM quizAttempts WHERE modulePageID IN (SELECT modulePageID FROM modulePages WHERE moduleID = $1)", [moduleId]);
@@ -67,7 +99,32 @@ let quizId;
 
 test("quiz routes require a signed-in user, but the health check does not", async () => {
   assert.equal((await api(`/modules/${moduleId}/quizzes`)).status, 401);
+  assert.equal((await fetch(`${baseUrl}/api/modules/${moduleId}/quizzes`, { headers: { "X-User-Id": String(users.teacher) } })).status, 401);
   assert.equal((await api("/health")).status, 200);
+});
+
+test("Auth0 identity is linked to the pre-provisioned account and supplies its role", async () => {
+  const result = await api("/auth/me", { as: "teacher" });
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body.user.roles, ["teacher"]);
+  const linked = await pool.query("SELECT auth0Sub FROM users WHERE userID = $1", [users.teacher]);
+  assert.equal(linked.rows[0].auth0sub, `auth0|${users.teacher}`);
+});
+
+test("only verified emails with a provisioned LMS account can authenticate", async () => {
+  const unverified = await api("/auth/me", {
+    as: "student",
+    tokenClaims: { "https://stewardtree.app/claims/email_verified": false },
+  });
+  assert.equal(unverified.status, 403);
+
+  const unknown = await api("/auth/me", {
+    as: "student",
+    tokenClaims: {
+      "https://stewardtree.app/claims/email": "unknown@example.com",
+    },
+  });
+  assert.equal(unknown.status, 403);
 });
 
 test("only the module's instructor can create a quiz, and it starts as a draft", async () => {
@@ -133,7 +190,7 @@ test("published quizzes are visible to enrolled students without the answers", a
 
 test("other instructors can view published quizzes read-only, without the answers", async () => {
   const list = await api(`/modules/${moduleId}/quizzes`, { as: "otherTeacher" });
-  assert.equal(list.status, 200);
+  assert.equal(list.status, 200, JSON.stringify(list.body));
   assert.equal(list.body.quizzes.length, 1);
   const view = await api(`/quizzes/${quizId}`, { as: "otherTeacher" });
   assert.equal(view.status, 200);

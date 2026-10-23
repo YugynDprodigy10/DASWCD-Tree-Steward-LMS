@@ -12,7 +12,7 @@ Run `npm run dev` from `frontend`, then choose **Administrator demo**. Use sampl
 6. Assign Morgan to Week 1 using Role & modules. Confirm the name appears on the Modules page; remove the assignment there and verify the unassigned state.
 7. Deactivate Morgan. Confirm reset is disabled and Morgan no longer counts as an active assigned instructor. Reactivate to restore saved assignments.
 8. Preview an admin password-reset request. Confirm the result explicitly says no email was sent.
-9. Sign out, open Forgot password, and complete the request/reset preview. Confirm no real password change is claimed.
+9. Confirm Auth0 owns actual sign-in and password recovery. Do not represent the administrator demo's sample reset as a real password change.
 10. Sign out and re-enter the admin demo. Sample changes must reset. Verify student and instructor demos still open normally.
 
 ## Responsive and keyboard checks
@@ -23,7 +23,7 @@ Run `npm run dev` from `frontend`, then choose **Administrator demo**. Use sampl
 
 ## Scope
 
-The sample directory and module assignments do not change authentication or the separate instructor demo's permissions. Real integration needs backend authorization and a shared account/course data source. Progress is explicitly illustrative. The 12-character password minimum is a preview choice, not a finalized backend policy.
+The sample directory and module assignments do not change Auth0 authentication or the separate instructor demo's permissions. Progress is explicitly illustrative. The 12-character password minimum applies only to the local invitation preview, not to Auth0 accounts.
 
 ## Module and people management checks
 

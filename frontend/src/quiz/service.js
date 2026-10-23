@@ -4,9 +4,10 @@ export function demoQuizzes() { return JSON.parse(localStorage.getItem(KEY) || J
 function store(items) { localStorage.setItem(KEY, JSON.stringify(items)); }
 export function resetDemoQuizzes() { localStorage.removeItem(KEY); for (const key of Object.keys(localStorage)) { if (key.startsWith('quiz-launch:')) localStorage.removeItem(key); } }
 export async function quizRequest(user, path, method = 'GET', body) {
-  if (!user?.id) throw new Error('Sign in to use saved quizzes.');
+  if (!user?.getAccessTokenSilently) throw new Error('Sign in to use saved quizzes.');
+  const token = await user.getAccessTokenSilently();
   let response;
-  try { response = await fetch(`/api${path}`, { method, headers: { 'Content-Type': 'application/json', 'X-User-Id': String(user.id) }, ...(body ? { body: JSON.stringify(body) } : {}) }); }
+  try { response = await fetch(`/api${path}`, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, ...(body ? { body: JSON.stringify(body) } : {}) }); }
   catch { throw new Error('Cannot reach the quiz service. Check your connection and try again.'); }
   const result = await response.json().catch(() => null);
   if (!response.ok || !result) throw new Error(result?.error || 'Quiz service unavailable. Run the backend with the quiz API from PR #12.');

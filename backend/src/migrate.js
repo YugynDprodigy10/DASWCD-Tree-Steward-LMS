@@ -7,7 +7,7 @@ import { readFile } from "node:fs/promises";
 import { withDatabase } from "./database.js";
 
 //VERY IMPORTANT: Make sure that ALL migration files for the database are listed under 'const migrationFiles', in the order they must run.
-const migrationFiles = ["create_database.sql", "002_quiz_builder.sql"];
+const migrationFiles = ["create_database.sql", "002_quiz_builder.sql", "003_auth0_identity.sql"];
 
 async function runMigration() { // Applies the database migration files in order.
   await withDatabase(async (client) => {
