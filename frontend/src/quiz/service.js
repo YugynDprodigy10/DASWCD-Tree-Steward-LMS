@@ -1,5 +1,5 @@
 const KEY = 'steward-quiz-demo-v1';
-const seed = [{ id: 'demo-tree', moduleId: 2, title: 'Tree identification', published: true, questions: [{ id: 'q1', text: 'Which observation helps identify a tree?', points: 2, choices: [{ id: 'c1', text: 'Leaf shape and arrangement', isCorrect: true }, { id: 'c2', text: 'The day of the week', isCorrect: false }] }] }];
+const seed = [{ id: 'demo-tree', moduleId: 2, title: 'Tree identification', published: true, order: 1, questions: [{ id: 'q1', text: 'Which observation helps identify a tree?', points: 2, choices: [{ id: 'c1', text: 'Leaf shape and arrangement', isCorrect: true }, { id: 'c2', text: 'The day of the week', isCorrect: false }] }] }];
 export function demoQuizzes() { return JSON.parse(localStorage.getItem(KEY) || JSON.stringify(seed)); }
 function store(items) { localStorage.setItem(KEY, JSON.stringify(items)); }
 export function resetDemoQuizzes() { localStorage.removeItem(KEY); for (const key of Object.keys(localStorage)) { if (key.startsWith('quiz-launch:')) localStorage.removeItem(key); } }
@@ -17,6 +17,9 @@ export function demoSave(quiz) {
   const index = items.findIndex(q => q.id === quiz.id);
   if (index < 0) items.push(quiz); else items[index] = quiz;
   store(items); return quiz;
+}
+export function demoDelete(id) {
+  store(demoQuizzes().filter(q => q.id !== id));
 }
 export function launchQuiz(quiz, user, preview = false) {
   const token = crypto.randomUUID();

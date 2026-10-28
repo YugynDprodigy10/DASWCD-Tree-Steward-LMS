@@ -78,6 +78,7 @@ test("only the module's instructor can create a quiz, and it starts as a draft",
   assert.equal(created.status, 201);
   assert.equal(created.body.quiz.title, "Native trees");
   assert.equal(created.body.quiz.published, false);
+  assert.ok(Number.isInteger(created.body.quiz.order) && created.body.quiz.order >= 1, "new quizzes report their position in the module");
   quizId = created.body.quiz.id;
 });
 
@@ -130,6 +131,17 @@ test("published quizzes are visible to enrolled students without the answers", a
   assert.equal((await api(`/quizzes/${quizId}`, { as: "outsider" })).status, 404);
 });
 
+test("other instructors can view published quizzes read-only, without the answers", async () => {
+  const list = await api(`/modules/${moduleId}/quizzes`, { as: "otherTeacher" });
+  assert.equal(list.status, 200);
+  assert.equal(list.body.quizzes.length, 1);
+  const view = await api(`/quizzes/${quizId}`, { as: "otherTeacher" });
+  assert.equal(view.status, 200);
+  assert.equal("isCorrect" in view.body.quiz.questions[0].choices[0], false);
+  const edit = await api(`/quizzes/${quizId}`, { as: "otherTeacher", method: "PATCH", body: { title: "Hijacked" } });
+  assert.equal(edit.status, 403);
+});
+
 test("students must answer every question, and the server scores the attempt", async () => {
   const quiz = (await api(`/quizzes/${quizId}`, { as: "teacher" })).body.quiz;
   const [first, second] = quiz.questions;
@@ -164,4 +176,27 @@ test("students must answer every question, and the server scores the attempt", a
 test("questions are locked once a student has taken the quiz", async () => {
   const locked = await api(`/quizzes/${quizId}/questions`, { as: "teacher", method: "POST", body: question("Late", 1, 0) });
   assert.equal(locked.status, 409);
+});
+
+test("a quiz students have taken can't be deleted, so their scores are kept", async () => {
+  const refused = await api(`/quizzes/${quizId}`, { as: "teacher", method: "DELETE" });
+  assert.equal(refused.status, 409);
+  assert.equal((await api(`/quizzes/${quizId}`, { as: "teacher" })).status, 200);
+});
+
+test("only the module's instructor can delete an untaken quiz, and it is fully removed", async () => {
+  const created = await api(`/modules/${moduleId}/quizzes`, { as: "teacher", method: "POST", body: { title: "Disposable" } });
+  const id = created.body.quiz.id;
+  await api(`/quizzes/${id}/questions`, { as: "teacher", method: "POST", body: question("Gone soon", 1, 0) });
+
+  assert.equal((await api(`/quizzes/${id}`, { as: "otherTeacher", method: "DELETE" })).status, 403);
+  assert.equal((await api(`/quizzes/${id}`, { as: "student", method: "DELETE" })).status, 403);
+
+  const deleted = await api(`/quizzes/${id}`, { as: "teacher", method: "DELETE" });
+  assert.equal(deleted.status, 200);
+  assert.equal((await api(`/quizzes/${id}`, { as: "teacher" })).status, 404);
+  const list = await api(`/modules/${moduleId}/quizzes`, { as: "teacher" });
+  assert.equal(list.body.quizzes.some((quiz) => quiz.id === id), false);
+  const leftovers = await pool.query("SELECT 1 FROM quizQuestions WHERE modulePageID = $1", [id]);
+  assert.equal(leftovers.rowCount, 0);
 });
