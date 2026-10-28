@@ -7,8 +7,9 @@ other sql files created beyond this one REQUIRE this header!
 CREATE TABLE IF NOT EXISTS users (
     userID SERIAL PRIMARY KEY,
     username TEXT NOT NULL UNIQUE,
+    displayName TEXT,
     email TEXT NOT NULL UNIQUE,
-    passwordTemp TEXT,
+    auth0InvitePending BOOLEAN NOT NULL DEFAULT FALSE,
     student BOOLEAN NOT NULL DEFAULT FALSE,
     teacher BOOLEAN NOT NULL DEFAULT FALSE,
     administrator BOOLEAN NOT NULL DEFAULT FALSE

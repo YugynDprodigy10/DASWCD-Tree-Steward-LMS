@@ -1,19 +1,19 @@
 # Administrator preview checks
 
-Run `npm run dev` from `frontend` and enable the local test-login flags documented in README.md. Start the backend and database, then choose **Test administrator**. These checks cover an admin workspace backed by local sample UI data; admin account changes are not persisted to the LMS database or sent by email.
+Run `npm run dev` from `frontend`, enable the local test-login flags documented in README.md, configure the Auth0 Management API variables in `backend/.env`, and start the backend and database. Choose **Test administrator** to exercise account invitations; the remaining admin workspace tools still use local sample UI data.
 
 ## Functional checks
 
-1. Invite a student. Verify that the invitation appears as Pending. Try `JORDAN@example.com` and confirm that the existing account is detected.
-2. Preview acceptance. Mismatching passwords must show a validation error. Matching passwords of at least 12 characters add one sample person and mark the invitation Accepted.
-3. Revoke a pending invitation. Acceptance should be unavailable until it is renewed. Renew an expired invitation as well.
+1. Invite a new student. Confirm an Auth0 password setup email arrives and that the invitation appears as Pending. Try an existing LMS email with different capitalization and verify it is rejected.
+2. Use the emailed link to set a password, then sign in through Auth0. Verify the pending invitation disappears after the first successful login.
+3. Use **Resend setup email** for a pending account and verify Auth0 sends another password setup/reset email.
 4. Change Jordan's email. Confirm that the 3/12 sample completion count remains and no duplicate person is created.
 5. Filter People by role and search by name/email. Clear filters from an empty result.
 6. Assign Morgan to Week 1 using Role & modules. Confirm the name appears on the Modules page; remove the assignment there and verify the unassigned state.
 7. Deactivate Morgan. Confirm reset is disabled and Morgan no longer counts as an active assigned instructor. Reactivate to restore saved assignments.
-8. Preview an admin password-reset request. Confirm the result explicitly says no email was sent.
-9. Confirm Auth0 owns actual sign-in and password recovery. Do not represent the test administrator's sample reset as a real password change.
-10. Sign out and re-enter the test administrator account. Sample changes must reset. Verify test student and instructor accounts still open normally.
+8. Preview an admin password-reset request. Confirm the result explicitly says no email was sent for sample people.
+9. Confirm Auth0 owns actual sign-in and password recovery for invited accounts.
+10. Sign out and re-enter the test administrator account. Sample workspace changes must reset. Verify test student and instructor accounts still open normally.
 
 ## Responsive and keyboard checks
 

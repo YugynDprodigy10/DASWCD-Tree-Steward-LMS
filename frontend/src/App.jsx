@@ -310,7 +310,7 @@ function CourseApp({ auth0, testLoginEnabled }) {
       isResolving={isResolvingAccount}
     />
   );
-  if (role === "admin" || role === "administrator") return <AdminWorkspace brand={<Brand />} onExit={leaveDemo} />;
+  if (role === "admin" || role === "administrator") return <AdminWorkspace brand={<Brand />} user={user} onExit={leaveDemo} />;
   const navItems = isInstructor
     ? [
         ["Home", "⌂"],

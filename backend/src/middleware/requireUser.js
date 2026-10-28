@@ -44,7 +44,8 @@ function appRoles(user) {
 
 async function findOrLinkUser(subject, email) {
   const existing = await pool.query(
-    `SELECT userID, username, email, student, teacher, administrator
+    `SELECT userID, username, email, student, teacher, administrator,
+            auth0InvitePending
      FROM users WHERE auth0Sub = $1`,
     [subject],
   );
@@ -53,13 +54,15 @@ async function findOrLinkUser(subject, email) {
   const linked = await pool.query(
     `UPDATE users SET auth0Sub = $1
      WHERE LOWER(email) = LOWER($2) AND auth0Sub IS NULL
-     RETURNING userID, username, email, student, teacher, administrator`,
+     RETURNING userID, username, email, student, teacher, administrator,
+               auth0InvitePending`,
     [subject, email],
   );
   if (linked.rows[0]) return linked.rows[0];
 
   const raced = await pool.query(
-    `SELECT userID, username, email, student, teacher, administrator
+    `SELECT userID, username, email, student, teacher, administrator,
+            auth0InvitePending
      FROM users WHERE auth0Sub = $1`,
     [subject],
   );
@@ -127,14 +130,34 @@ export default async function requireUser(req, res, next) {
   const email = claims["https://stewardtree.app/claims/email"] ?? claims.email;
   const emailVerified = claims["https://stewardtree.app/claims/email_verified"] ?? claims.email_verified;
   if (typeof claims.sub !== "string" || !claims.sub ||
-      typeof email !== "string" || emailVerified !== true) {
-    return res.status(403).json({ error: "Use a verified email address to access this account." });
+      typeof email !== "string") {
+    return res.status(403).json({ error: "Your Auth0 account must include an email address." });
   }
 
   try {
+    if (emailVerified !== true) {
+      const invited = await pool.query(
+        `SELECT userID, username, email, student, teacher, administrator,
+                auth0InvitePending
+         FROM users
+         WHERE auth0Sub = $1 AND LOWER(email) = LOWER($2)
+           AND auth0InvitePending = TRUE`,
+        [claims.sub, email],
+      );
+      if (!invited.rows[0]) {
+        return res.status(403).json({ error: "Use a verified email address to access this account." });
+      }
+    }
+
     const user = await findOrLinkUser(claims.sub, email);
     if (!user) {
       return res.status(403).json({ error: "No LMS account is assigned to this verified email address." });
+    }
+    if (user.auth0invitepending && emailVerified === true) {
+      await pool.query(
+        "UPDATE users SET auth0InvitePending = FALSE WHERE userID = $1",
+        [user.userid],
+      );
     }
 
     const roles = appRoles(user);

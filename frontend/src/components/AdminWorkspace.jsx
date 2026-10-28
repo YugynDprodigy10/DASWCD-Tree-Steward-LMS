@@ -3,6 +3,7 @@ import Modal from "./Modal";
 import { PasswordSetup } from "./AccountRecovery";
 import { modules as initialModules } from "../data/course";
 import AdminModules from "./AdminModules";
+import { adminRequest } from "../admin/service";
 import "./AdminWorkspace.css";
 
 import { initialPeople, initialInvitations } from "../data/admin";
@@ -38,12 +39,13 @@ function ModuleChoices({ selected, onChange, modules }) {
   );
 }
 
-function PersonForm({ person, mode, onSave, onClose, emailTaken, modules }) {
+function PersonForm({ person, mode, onSave, onClose, emailTaken, modules, liveInvite }) {
   const [name, setName] = useState(person?.name || "");
   const [email, setEmail] = useState(person?.email || "");
   const [role, setRole] = useState(person?.role || "Student");
   const [assigned, setAssigned] = useState(person?.modules || []);
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
   const invite = mode === "invite" || mode === "add";
   const directAdd = mode === "add";
   const [confirmAdmin, setConfirmAdmin] = useState(false);
@@ -62,7 +64,7 @@ function PersonForm({ person, mode, onSave, onClose, emailTaken, modules }) {
       onClose={onClose}
     >
       <form
-        onSubmit={(event) => {
+        onSubmit={async (event) => {
           event.preventDefault();
           if ((invite && !name.trim()) || !email.trim()) {
             setError("Enter a name and a valid email address.");
@@ -78,12 +80,20 @@ function PersonForm({ person, mode, onSave, onClose, emailTaken, modules }) {
             setError("Confirm administrator access before saving.");
             return;
           }
-          onSave({
-            name: name.trim(),
-            email: normalizeEmail(email),
-            role,
-            modules: role === "Instructor" ? assigned : [],
-          });
+          setSaving(true);
+          setError("");
+          try {
+            await onSave({
+              name: name.trim(),
+              email: normalizeEmail(email),
+              role,
+              modules: role === "Instructor" ? assigned : [],
+            });
+          } catch (saveError) {
+            setError(saveError.message || "Unable to save this invitation.");
+          } finally {
+            setSaving(false);
+          }
         }}
       >
         <p className="muted">
@@ -129,8 +139,9 @@ function PersonForm({ person, mode, onSave, onClose, emailTaken, modules }) {
               <option>Administrator</option>
             </select>
             <p className="helper">
-              Choose the access this person needs. Administrator changes are a
-              frontend preview only.
+              {liveInvite
+                ? "This role is assigned in the LMS database and enforced by the API."
+                : "Choose the access this person needs. Administrator changes are a frontend preview only."}
             </p>
             {role === "Instructor" && (
               <ModuleChoices
@@ -157,7 +168,9 @@ function PersonForm({ person, mode, onSave, onClose, emailTaken, modules }) {
             : invite
               ? directAdd
                 ? "Adds a sample directory record only. No real account or sign-in access is created; live registration remains invitation-only."
-                : "Demo only: an invitation will be added to this session. Email delivery is not connected."
+                : liveInvite
+                  ? "Creates a real LMS and Auth0 account. Auth0 emails a one-time password setup link; the user must receive that email to choose a password."
+                  : "Demo only: an invitation will be added to this session. Email delivery is not connected."
               : "Access changes apply only to this sample directory. Real permissions must be enforced by the backend."}
         </p>
         {error && (
@@ -169,11 +182,13 @@ function PersonForm({ person, mode, onSave, onClose, emailTaken, modules }) {
           <button type="button" className="secondary" onClick={onClose}>
             Cancel
           </button>
-          <button className="primary" type="submit">
+          <button className="primary" type="submit" disabled={saving}>
             {invite
               ? directAdd
                 ? "Add sample person"
-                : "Create sample invitation"
+                : liveInvite
+                  ? saving ? "Creating account…" : "Send account setup email"
+                  : "Create sample invitation"
               : "Save sample changes"}
           </button>
         </div>
@@ -182,7 +197,7 @@ function PersonForm({ person, mode, onSave, onClose, emailTaken, modules }) {
   );
 }
 
-export default function AdminWorkspace({ brand, onExit }) {
+export default function AdminWorkspace({ brand, user, onExit }) {
   const [page, setPage] = useState("Overview");
   const [modules, setModules] = useState(() =>
     initialModules.map((module) => ({
@@ -194,27 +209,41 @@ export default function AdminWorkspace({ brand, onExit }) {
   );
   const [showRemoved, setShowRemoved] = useState(false);
   const [people, setPeople] = useState(initialPeople);
-  const [invitations, setInvitations] = useState(initialInvitations);
+  const [invitations, setInvitations] = useState(user ? [] : initialInvitations);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All roles");
   const [dialog, setDialog] = useState(null);
   const [notice, setNotice] = useState("");
+  const [noticeIsError, setNoticeIsError] = useState(false);
   const [activity, setActivity] = useState([]);
   const heading = useRef(null);
   useEffect(() => {
     heading.current?.focus({ preventScroll: true });
     window.scrollTo(0, 0);
   }, [page]);
-  const record = (text) => {
+  const record = (text, isError = false) => {
     setNotice(text);
+    setNoticeIsError(isError);
     setActivity((previous) => [text, ...previous].slice(0, 8));
   };
+  useEffect(() => {
+    if (!user?.getAccessTokenSilently) return undefined;
+    let active = true;
+    adminRequest(user, "/admin/invitations")
+      .then(({ invitations: liveInvitations }) => {
+        if (active) setInvitations(liveInvitations);
+      })
+      .catch((error) => {
+        if (active) record(error.message, true);
+      });
+    return () => { active = false; };
+  }, [user]);
   const emailTaken = (email, exceptId) =>
-    people.some(
+    (!user && people.some(
       (person) =>
         person.id !== exceptId &&
         normalizeEmail(person.email) === normalizeEmail(email),
-    ) ||
+    )) ||
     invitations.some(
       (invite) =>
         invite.status === "Pending" &&
@@ -237,6 +266,7 @@ export default function AdminWorkspace({ brand, onExit }) {
     if (status === "Pending" && emailTaken(invite.email)) {
       record(
         "That address already has an account or pending invitation. Resolve it before resending.",
+        true,
       );
       return;
     }
@@ -262,6 +292,7 @@ export default function AdminWorkspace({ brand, onExit }) {
     ) {
       record(
         "This invitation cannot be accepted. Check its status and email address.",
+        true,
       );
       setDialog(null);
       return;
@@ -343,7 +374,7 @@ export default function AdminWorkspace({ brand, onExit }) {
             Tree Steward Program <span className="slash">/</span> {page}
           </span>
           <div className="topbar-actions">
-            <span className="demo-badge">Admin demo</span>
+            <span className="demo-badge">{user ? "Admin workspace" : "Admin demo"}</span>
             <button className="text-button mobile-signout" onClick={onExit}>
               Sign out
             </button>
@@ -374,11 +405,15 @@ export default function AdminWorkspace({ brand, onExit }) {
             </div>
           </div>
           <p className="admin-demo-note">
-            Sample workspace · No emails are sent or real accounts changed. All
-            changes reset on refresh or sign out.
+            {user
+              ? "Account invitations create real LMS and Auth0 users and send password setup emails. Other people, module, and progress tools are still sample data."
+              : "This is a sample admin workspace. Invitations shown here are previews and do not create real accounts or send email."}
           </p>
           {notice && (
-            <p className="success-message" role="status">
+            <p
+              className={noticeIsError ? "error-message" : "success-message"}
+              role={noticeIsError ? "alert" : "status"}
+            >
               {notice}
             </p>
           )}
@@ -610,8 +645,9 @@ export default function AdminWorkspace({ brand, onExit }) {
           {page === "Invitations" && (
             <>
               <p className="muted">
-                Registration is invitation-only. Preview acceptance to explore
-                account setup.
+                {user
+                  ? "Registration is invitation-only. Auth0 emails a password setup link to each invited user."
+                  : "Registration is invitation-only. Preview acceptance to explore account setup."}
               </p>
               <section className="invite-list" aria-label="Invitations">
                 {invitations.map((invite) => (
@@ -632,7 +668,26 @@ export default function AdminWorkspace({ brand, onExit }) {
                       </span>
                     </div>
                     <div className="invite-actions">
-                      {invite.status === "Pending" && (
+                      {invite.status === "Pending" && invite.auth0Managed && (
+                        <button
+                          className="secondary"
+                          onClick={async () => {
+                            try {
+                              await adminRequest(
+                                user,
+                                `/admin/invitations/${invite.id}/resend`,
+                                "POST",
+                              );
+                              record(`Account setup email resent to ${invite.email}.`);
+                            } catch (error) {
+                              record(error.message, true);
+                            }
+                          }}
+                        >
+                          Resend setup email
+                        </button>
+                      )}
+                      {invite.status === "Pending" && !invite.auth0Managed && (
                         <>
                           <button
                             className="secondary"
@@ -724,10 +779,11 @@ export default function AdminWorkspace({ brand, onExit }) {
           key={`${dialog.mode}-${dialog.person?.id || "new"}`}
           mode={dialog.mode}
           person={dialog.person}
+          liveInvite={Boolean(user?.getAccessTokenSilently) && dialog.mode === "invite"}
           emailTaken={emailTaken}
           modules={modules}
           onClose={() => setDialog(null)}
-          onSave={(values) => {
+          onSave={async (values) => {
             if (dialog.mode === "add") {
               setPeople((previous) => [
                 ...previous,
@@ -747,13 +803,27 @@ export default function AdminWorkspace({ brand, onExit }) {
                 `${values.name} added to the sample directory. No real account was created.`,
               );
             } else if (dialog.mode === "invite") {
-              setInvitations((previous) => [
-                { ...values, id: crypto.randomUUID(), status: "Pending" },
-                ...previous,
-              ]);
-              record(
-                `Sample invitation created for ${values.name}. No email was sent.`,
-              );
+              if (user?.getAccessTokenSilently) {
+                const result = await adminRequest(user, "/admin/invitations", "POST", {
+                  name: values.name,
+                  email: values.email,
+                  role: values.role.toLowerCase(),
+                  moduleIds: values.modules,
+                });
+                setInvitations((previous) => [result.invitation, ...previous]);
+                record(
+                  result.emailSent
+                    ? `Account created and setup email sent to ${values.email}.`
+                    : `Account created, but Auth0 could not send the setup email: ${result.emailError} Use Resend setup email to retry.`,
+                  !result.emailSent,
+                );
+              } else {
+                setInvitations((previous) => [
+                  { ...values, id: crypto.randomUUID(), status: "Pending" },
+                  ...previous,
+                ]);
+                record(`Sample invitation created for ${values.name}. No email was sent.`);
+              }
               setPage("Invitations");
             } else {
               setPeople((previous) =>

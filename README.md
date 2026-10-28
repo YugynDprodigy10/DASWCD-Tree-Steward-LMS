@@ -41,7 +41,13 @@ Use Node 24 for consistency with CI. If Windows still finds an old version, run 
 
 ## Run the frontend
 
-### Configure Auth0
+
+## Enable/Disable Test Users (for production)
+
+Set ENABLE_TEST_LOGIN=true or false in the backend/.env file.
+Set VITE_ENABLE_TEST_LOGIN=true or false in frontend/.env.local file.
+
+### Configuring Auth0 for the final application
 
 In Auth0, create a **Single Page Application** and an **API**. Set the API identifier to the audience you will use below, enable RS256 signing, and allow `http://localhost:5173` for the SPA's callback URL, logout URL, and web origin. Enable **Allow Refresh Token Rotation** in the SPA's settings. In the API settings, enable **Allow Offline Access** so the SPA can request refresh tokens.
 
@@ -63,9 +69,22 @@ Copy `frontend/.env.example` to `frontend/.env.local` and `backend/.env.example`
 
 The SPA caches Auth0 tokens in local storage and uses refresh-token rotation to restore the login after a reload and renew access tokens. This improves session persistence when browser privacy settings block silent authentication, but local-storage tokens are accessible to JavaScript on the origin; keep dependencies updated and prevent cross-site scripting. Refresh tokens expire according to the Auth0 application policy, so users may eventually need to sign in again.
 
-An LMS user must already exist in the database with the same email address and an assigned student, teacher, or administrator role. On first Auth0 sign-in, the API requires Auth0 to mark the email verified and permanently stores the token subject (Auth0 user ID) in `users.auth0Sub`; later requests look up that stable ID rather than matching email again. The numeric `users.userID` remains the LMS identifier referenced by quiz and enrollment tables. Unknown emails are denied; create/provision LMS accounts through the database workflow before granting access. Auth0 manages passwords and password resets.
+An LMS user must exist in the database with an assigned student, teacher, or administrator role. Accounts are created through the admin invitation flow below or provisioned directly in the database. On first Auth0 sign-in, the API requires Auth0 to mark the email verified and permanently stores the token subject (Auth0 user ID) in `users.auth0Sub`; later requests look up that stable ID rather than matching email again. The numeric `users.userID` remains the LMS identifier referenced by quiz and enrollment tables. Unknown emails are denied. Auth0 manages passwords and password resets.
 
-The migration leaves the legacy `passwordTemp` column and existing values in place temporarily for compatibility, but the application no longer reads or writes it. Do not use or add passwords there; arrange a separate cleanup once any needed legacy data has been reviewed.
+### Admin-created Auth0 accounts
+
+The admin **Invite person** action creates the LMS and Auth0 database-connection accounts on the backend, assigns the selected LMS role and instructor modules, and asks Auth0 to email a password setup/reset link. Auth0 gives the new account a cryptographically random initial password that is never returned to the browser; the invitee must use the link sent to their email to choose a password before signing in. The Auth0 built-in email provider can send this during development; no SMTP credentials are required.
+
+To keep account creation admin-only, open the Auth0 database connection settings (Dashboard → **Authentication → Database** → select the connection) and disable public sign-ups. The backend can still provision users through the Management API.
+
+1. In Auth0, create a **Machine to Machine Application** and authorize it to the **Auth0 Management API** with only `create:users` and `delete:users` scopes. The delete scope is used only to clean up an Auth0 user if its corresponding LMS database transaction fails.
+2. Copy the M2M application's client ID and client secret into the ignored `backend/.env` file as `AUTH0_MGMT_CLIENT_ID` and `AUTH0_MGMT_CLIENT_SECRET`. Set `AUTH0_SPA_CLIENT_ID` to the SPA application's client ID and `AUTH0_DATABASE_CONNECTION` to the exact name of the Auth0 database connection enabled for that SPA (commonly `Username-Password-Authentication`). Keep all M2M secrets in the backend only; never use `VITE_` variables for them.
+3. In **Branding → Email Provider**, leave **Use my own email provider** off to use Auth0's built-in development provider. Ensure the **Change Password** email template is enabled. The built-in provider is limited to 10 emails/minute and is not for production.
+4. Run `npm run migrate` from `backend`, restart the backend, and sign in to the LMS as an account whose database role is administrator. Use **Invite person**. The invitee receives an Auth0 password-reset/setup email; after setting a password they sign in through the usual Auth0 login.
+
+The API rejects invitations from non-administrators, validates the requested role and module assignments, and never accepts a browser-supplied user ID as authority. Pending invites can be resent from **Invitations**. The admin people, modules, and progress screens remain sample data; only invitation-created accounts are persisted at this stage.
+
+The database migration `004_remove_password_temp.sql` removes the unused legacy `users.passwordTemp` column and its stored values. Existing developer databases apply it the next time `npm run migrate` is run from `backend`; new databases no longer create the column.
 
 For a new checkout:
 
@@ -109,21 +128,23 @@ For local test-account buttons only, set `ENABLE_TEST_LOGIN=true` in `backend/.e
 
 ### Auth0 email capabilities
 
-Auth0 can send verification and password-reset emails for database-connection users through Universal Login. Configure an email provider under **Branding → Email Provider** (dashboard wording may vary). The built-in provider is for development only; production delivery requires an external SMTP/email provider such as Amazon SES, SendGrid, or another supported service. Auth0 also supports invitation workflows based on password-change tickets, but the LMS's current invitation screens are local previews and do not send invitations. A real invite feature needs a backend integration with Auth0's Management API/email workflow; never put a Management API client secret in the React app.
+Auth0 can send verification and password-reset emails for database-connection users through Universal Login. Connecting email is fairly direct if you already have a provider account and its credentials: in the Auth0 Dashboard, open **Branding → Email Provider**, enable **Use my own email provider**, choose a supported integration or **SMTP**, and enter the provider credentials plus a verified **From** address. For direct SMTP, the server must support SMTP AUTH LOGIN and TLS 1.2+; port 587 is recommended when available. Your provider may also require domain/sender verification and allowlisting Auth0's sending IP addresses. Save the settings, use **Send Test Email**, and check Auth0 logs if it fails. The configured provider is tenant-wide. Auth0's built-in provider is for development only (10 emails per minute, no custom sender or templates); production delivery needs an external provider.
+
+After delivery is configured, customize or enable the relevant templates under **Email Templates**. Auth0's built-in provider cannot use custom templates; use an external provider if you need custom branding, higher volume, or production delivery. Never put Management API credentials in the React app.
 
 ## Try the interface
 
 ### Administrator and account-recovery preview
 
-Choose **Test administrator** to enter the administrator workspace using the seeded LMS account. The admin people, invitation, module, and progress screens are still illustrative local data, not connected to real admin APIs.
+Choose **Test administrator** to enter the administrator workspace using the seeded LMS account. The invite form creates real LMS and Auth0 accounts and sends Auth0 password setup emails when backend Management API configuration is present. The admin people, module, and progress screens remain illustrative local data.
 
-- **Invite person** creates a sample pending invitation. Duplicate account/pending-invitation emails are rejected without regard to capitalization.
-- In **Invitations**, copy a clearly labeled sample link, preview sending/acceptance, revoke, or renew expired/revoked invitations. Completing sample acceptance adds the person to the local directory.
+- **Invite person** creates a real account when authenticated as an administrator and the backend Auth0 settings above are configured. Duplicate email addresses are rejected without regard to capitalization.
+- In **Invitations**, resend setup emails for pending real accounts. The sample preview workflow remains available when viewing the interface without an authenticated admin account.
 - In **People**, change an email while retaining the same account and progress, add a sample person, assign student/instructor/administrator roles with confirmation for administrator access, remove/restore people, request a sample password reset, or deactivate/reactivate an account.
 - In **Modules**, add/edit module details, independently toggle student and instructor visibility, preview each audience catalog, and select active assigned instructors. New modules start hidden from both audiences. Inactive instructors retain their assignments but are not displayed as active module instructors.
 - Auth0 handles real sign-in and password recovery. The administrator demo's account-management examples remain local sample data only.
 
-These workflows use in-memory sample data and reset on refresh or sign out. They do not send email, generate usable invitation/reset links, or modify real accounts. Auth0 handles authentication for Auth0 users; the local test administrator button is only for local development. The existing API health check remains separate. Backend integration must provide invitation/reset token validation and expiration, authenticated admin API operations, and email updates tied to stable user IDs. Module visibility currently affects the admin catalog preview, not the separate student/instructor course pages. Multiple simultaneous classes are outside this preview.
+The people, module, and progress preview workflows use in-memory sample data and reset on refresh or sign out. Auth0 handles authentication for Auth0 users; the local test administrator button is only for local development. The existing API health check remains separate. Module visibility currently affects the admin catalog preview, not the separate student/instructor course pages. Multiple simultaneous classes are outside this preview.
 
 ### Student and instructor preview
 
@@ -148,7 +169,7 @@ npm run preview
 - `build`: creates the deployable site in `frontend/dist`.
 - `preview`: serves the production build locally; open its printed URL.
 
-Use `npm ci` after cloning or pulling lockfile changes. Use `npm install <package>` only when intentionally adding a dependency, and commit both package files. For frontend quiz/auth adapter tests, run `node --test test/quiz.test.js` from `frontend`. Backend API tests run with `npm test` from `backend` after starting the database and applying migrations.
+Use `npm ci` after cloning or pulling lockfile changes. Use `npm install <package>` only when intentionally adding a dependency, and commit both package files. For frontend quiz/auth adapter tests, run `node --test test/quiz.test.js` from `frontend`. Backend API tests run with `npm test` from `backend` after starting the database and applying migrations. Backend authentication and invitation coverage is in `backend/test/auth.test.js`; quiz API coverage stays in `backend/test/quizzes.test.js`. Both use the shared Auth0 and database fixtures in `backend/test-support/authTestContext.js`.
 
 ## Repository layout
 

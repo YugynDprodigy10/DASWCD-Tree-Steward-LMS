@@ -592,6 +592,13 @@
   padding: 12px 16px;
   border-radius: 7px;
 }
+.error-message {
+  font-size: 13px;
+  color: #7a3028;
+  background: #f8e9e6;
+  padding: 12px 16px;
+  border-radius: 7px;
+}
 .modal {
   width: calc(100% - 32px);
   max-width: 570px;
