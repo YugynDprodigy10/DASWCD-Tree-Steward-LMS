@@ -1,4 +1,5 @@
 import { createRemoteJWKSet, errors, jwtVerify } from "jose";
+import { isLocalTestLoginEnabled, verifyLocalTestToken } from "../auth/localTestAuth.js";
 import pool from "../db/pool.js";
 
 let verifier;
@@ -66,14 +67,47 @@ async function findOrLinkUser(subject, email) {
 }
 
 export default async function requireUser(req, res, next) {
+  const authorization = req.get("Authorization") || "";
+  const match = /^Bearer\s+(.+)$/i.exec(authorization);
+  if (!match) {
+    return res.status(401).json({ error: "Sign in to continue." });
+  }
+
+  if (isLocalTestLoginEnabled(req)) {
+    try {
+      const userId = await verifyLocalTestToken(match[1]);
+      if (userId) {
+        const result = await pool.query(
+          `SELECT userID, username, email, student, teacher, administrator
+           FROM users WHERE userID = $1`,
+          [userId],
+        );
+        const user = result.rows[0];
+        if (user) {
+          const roles = appRoles(user);
+          if (roles.length > 0) {
+            req.user = {
+              id: user.userid,
+              username: user.username,
+              email: user.email,
+              roles,
+              isStudent: user.student,
+              isTeacher: user.teacher,
+              isAdmin: user.administrator,
+            };
+            return next();
+          }
+        }
+        return res.status(401).json({ error: "The local test account is no longer available." });
+      }
+    } catch (error) {
+      return next(error);
+    }
+  }
+
   let claims;
   try {
     const { issuer, audience, jwks } = getVerifier();
-    const authorization = req.get("Authorization") || "";
-    const match = /^Bearer\s+(.+)$/i.exec(authorization);
-    if (!match) {
-      return res.status(401).json({ error: "Sign in to continue." });
-    }
     ({ payload: claims } = await jwtVerify(match[1], jwks, { issuer, audience }));
   } catch (error) {
     if (error instanceof Error && error.message === authConfigurationError) {

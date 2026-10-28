@@ -13,6 +13,11 @@ WHERE NOT EXISTS (
 	SELECT 1 FROM users WHERE LOWER(username) = 'test student 1'
 );
 
+UPDATE users
+SET email = 'testteacher1@example.com'
+WHERE LOWER(username) = 'test teacher 1'
+	AND email <> 'testteacher1@example.com';
+
 INSERT INTO users (username, email, student, teacher, administrator)
 SELECT 'test teacher 1', 'testteacher1@example.com', FALSE, TRUE, FALSE
 WHERE NOT EXISTS (

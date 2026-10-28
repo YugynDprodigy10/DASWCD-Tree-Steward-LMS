@@ -17,6 +17,7 @@ await new Promise((resolve) => jwksServer.listen(0, "127.0.0.1", resolve));
 process.env.AUTH0_DOMAIN = "steward-test.auth0.local";
 process.env.AUTH0_AUDIENCE = "https://steward-tree.test/api";
 process.env.NODE_ENV = "test";
+process.env.ENABLE_TEST_LOGIN = "true";
 process.env.AUTH0_JWKS_URI = `http://127.0.0.1:${jwksServer.address().port}/.well-known/jwks.json`;
 const { default: app } = await import("../src/app.js");
 const { default: pool } = await import("../src/db/pool.js");
@@ -25,6 +26,7 @@ let baseUrl;
 let moduleId;
 const users = {};
 const emails = {};
+let insertedLocalTestUserId;
 
 async function makeUser(name, roles) {
   const email = `${tag}-${name}@example.com`;
@@ -37,8 +39,9 @@ async function makeUser(name, roles) {
   return result.rows[0].userid;
 }
 
-async function api(path, { as, method = "GET", body, tokenClaims } = {}) {
+async function api(path, { as, method = "GET", body, tokenClaims, bearerToken } = {}) {
   const headers = { "Content-Type": "application/json" };
+  if (bearerToken) headers.Authorization = `Bearer ${bearerToken}`;
   if (as) {
     const email = emails[as];
     const token = await new SignJWT({
@@ -68,6 +71,17 @@ const question = (text, points, correctIndex, count = 3) => ({
 before(async () => {
   const moduleRow = await pool.query("INSERT INTO modules (name) VALUES ($1) RETURNING moduleID", [tag]);
   moduleId = moduleRow.rows[0].moduleid;
+  const seededStudent = await pool.query(
+    "SELECT userID FROM users WHERE LOWER(username) = 'test student 1'",
+  );
+  if (!seededStudent.rows[0]) {
+    const localTestUser = await pool.query(
+      `INSERT INTO users (username, email, student, teacher, administrator)
+       VALUES ('test student 1', $1, TRUE, FALSE, FALSE) RETURNING userID`,
+      [`${tag}-local-test@example.com`],
+    );
+    insertedLocalTestUserId = localTestUser.rows[0].userid;
+  }
   users.teacher = await makeUser("teacher", { teacher: true });
   users.otherTeacher = await makeUser("otherTeacher", { teacher: true });
   users.student = await makeUser("student", { student: true });
@@ -91,6 +105,9 @@ after(async () => {
   await pool.query("DELETE FROM moduleTeachers WHERE moduleID = $1", [moduleId]);
   await pool.query("DELETE FROM moduleStudents WHERE moduleID = $1", [moduleId]);
   await pool.query("DELETE FROM modules WHERE moduleID = $1", [moduleId]);
+  if (insertedLocalTestUserId) {
+    await pool.query("DELETE FROM users WHERE userID = $1", [insertedLocalTestUserId]);
+  }
   await pool.query("DELETE FROM users WHERE userID = ANY($1)", [ids]);
   await pool.end();
 });
@@ -125,6 +142,41 @@ test("only verified emails with a provisioned LMS account can authenticate", asy
     },
   });
   assert.equal(unknown.status, 403);
+});
+
+test("local test sign-in uses a seeded LMS account and issues a short-lived API token", async () => {
+  const login = await api("/auth/test-login", {
+    method: "POST",
+    body: { account: "student" },
+  });
+  assert.equal(login.status, 200);
+  assert.deepEqual(login.body.user.roles, ["student"]);
+  assert.ok(login.body.accessToken);
+
+  const identity = await api("/auth/me", { bearerToken: login.body.accessToken });
+  assert.equal(identity.status, 200);
+  assert.equal(identity.body.user.id, login.body.user.id);
+  assert.deepEqual(identity.body.user.roles, ["student"]);
+
+  const invalid = await api("/auth/test-login", {
+    method: "POST",
+    body: { account: "unknown" },
+  });
+  assert.equal(invalid.status, 400);
+});
+
+test("local test sign-in is unavailable in production", async () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = "production";
+  try {
+    const result = await api("/auth/test-login", {
+      method: "POST",
+      body: { account: "student" },
+    });
+    assert.equal(result.status, 404);
+  } finally {
+    process.env.NODE_ENV = previousNodeEnv;
+  }
 });
 
 test("only the module's instructor can create a quiz, and it starts as a draft", async () => {

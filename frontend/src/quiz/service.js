@@ -24,8 +24,13 @@ export function demoDelete(id) {
 }
 export function launchQuiz(quiz, user, preview = false) {
   const token = crypto.randomUUID();
-  // Prototype identity only, not an authentication token. Never stores a password.
-  localStorage.setItem(`quiz-launch:${token}`, JSON.stringify({ quizId: quiz.id, user: user ? { id: user.id } : null, preview, expires: Date.now() + 2 * 60 * 60 * 1000 }));
+  localStorage.setItem(`quiz-launch:${token}`, JSON.stringify({
+    quizId: quiz.id,
+    user: user ? { id: user.id } : null,
+    localTestAccessToken: user?.isLocalTestLogin ? user.localTestAccessToken : null,
+    preview,
+    expires: Date.now() + 2 * 60 * 60 * 1000,
+  }));
   window.open(`${window.location.pathname}?quiz=${encodeURIComponent(token)}`, '_blank', 'noopener,noreferrer');
 }
 export function launchContext() {

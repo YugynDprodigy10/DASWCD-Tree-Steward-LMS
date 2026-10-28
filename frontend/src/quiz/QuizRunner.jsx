@@ -12,15 +12,16 @@ export default function QuizRunner({ getAccessTokenSilently }) {
   const [loading, setLoading] = useState(true);
   const [retry, setRetry] = useState(0);
   const resultHeading = useRef(null);
-  const apiUser = context?.user && getAccessTokenSilently
-    ? { ...context.user, getAccessTokenSilently }
-    : null;
   useEffect(() => {
     let active = true;
     (async () => { try {
       if (!context) throw new Error('This quiz window has expired. Open the quiz again from your course.');
-      const quizUser = context.user && getAccessTokenSilently
-        ? { ...context.user, getAccessTokenSilently }
+      const getQuizToken = getAccessTokenSilently ||
+        (context.localTestAccessToken
+          ? async () => context.localTestAccessToken
+          : null);
+      const quizUser = context.user && getQuizToken
+        ? { ...context.user, getAccessTokenSilently: getQuizToken }
         : null;
       if (context.user && !quizUser) throw new Error('Sign in again to open this quiz.');
       const q = quizUser ? (await quizRequest(quizUser, `/quizzes/${context.quizId}`)).quiz : demoQuizzes().find(q => q.id === context.quizId);
@@ -44,7 +45,14 @@ export default function QuizRunner({ getAccessTokenSilently }) {
       if (quiz.questions.some(q => !answers[q.id])) throw new Error('Answer every question before submitting.');
       if (context.preview) { setResult({ preview: true }); return; }
       let attempt;
-      if (apiUser) attempt = (await quizRequest(apiUser, `/quizzes/${quiz.id}/attempts`, 'POST', { answers: quiz.questions.map(q => ({ questionId: q.id, choiceId: Number(answers[q.id]) })) })).attempt;
+      const getQuizToken = getAccessTokenSilently ||
+        (context.localTestAccessToken
+          ? async () => context.localTestAccessToken
+          : null);
+      const quizUser = context.user && getQuizToken
+        ? { ...context.user, getAccessTokenSilently: getQuizToken }
+        : null;
+      if (quizUser) attempt = (await quizRequest(quizUser, `/quizzes/${quiz.id}/attempts`, 'POST', { answers: quiz.questions.map(q => ({ questionId: q.id, choiceId: Number(answers[q.id]) })) })).attempt;
       else {
         const current = demoQuizzes().find(q => q.id === quiz.id);
         if (!current?.published) throw new Error('This quiz is no longer published.');

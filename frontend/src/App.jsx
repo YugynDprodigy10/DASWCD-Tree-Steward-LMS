@@ -29,8 +29,10 @@ function Brand() {
   );
 }
 
-function Login({ onDemo, auth0, message, isResolving }) {
+function Login({ onTestLogin, testLoginEnabled, auth0, message, isResolving }) {
   const [loginError, setLoginError] = useState("");
+  const [testLoginError, setTestLoginError] = useState("");
+  const [testLoginAccount, setTestLoginAccount] = useState("");
 
   async function signIn() {
     setLoginError("");
@@ -46,6 +48,18 @@ function Login({ onDemo, auth0, message, isResolving }) {
       await auth0.logout();
     } catch (error) {
       setLoginError(error.message || "Unable to sign out.");
+    }
+  }
+
+  async function signInAsTestAccount(account) {
+    setTestLoginError("");
+    setTestLoginAccount(account);
+    try {
+      await onTestLogin(account);
+    } catch (error) {
+      setTestLoginError(error.message || "Unable to sign in to the local test account.");
+    } finally {
+      setTestLoginAccount("");
     }
   }
 
@@ -92,34 +106,36 @@ function Login({ onDemo, auth0, message, isResolving }) {
               Auth0 is not configured. Add the frontend settings described in the README to enable sign-in.
             </p>
           )}
-          {(loginError || message || auth0?.error) && (
+          {(loginError || testLoginError || message || auth0?.error) && (
             <p className="notice" role="alert">
-              {loginError || message || auth0.error}
+              {loginError || testLoginError || message || auth0.error}
             </p>
           )}
           {auth0?.isAuthenticated && (
             <button className="text-button" onClick={signOut}>Sign out of Auth0</button>
           )}
-          <div className="demo-section">
-            <span className="demo-label">EXPLORE THE PROTOTYPE</span>
-            <p>
-              These local demos are separate from Auth0 accounts. Sample changes reset on refresh.
-            </p>
-            <div className="demo-buttons">
-              <button className="secondary" onClick={() => onDemo("student")}>
-                Student demo
-              </button>
-              <button
-                className="secondary"
-                onClick={() => onDemo("instructor")}
-              >
-                Instructor demo
-              </button>
-              <button className="secondary" onClick={() => onDemo("admin")}>
-                Administrator demo
-              </button>
+          {testLoginEnabled && (
+            <div className="demo-section">
+              <span className="demo-label">LOCAL TEST ACCOUNTS</span>
+              <p>These buttons use the seeded LMS accounts and are available only in local development.</p>
+              <div className="demo-buttons">
+                {[
+                  ["student", "Test student"],
+                  ["instructor", "Test instructor"],
+                  ["administrator", "Test administrator"],
+                ].map(([account, label]) => (
+                  <button
+                    className="secondary"
+                    key={account}
+                    disabled={Boolean(testLoginAccount) || isResolving}
+                    onClick={() => signInAsTestAccount(account)}
+                  >
+                    {testLoginAccount === account ? "Signing in…" : label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </section>
       </main>
       <footer className="login-footer">
@@ -130,13 +146,13 @@ function Login({ onDemo, auth0, message, isResolving }) {
   );
 }
 
-export default function App({ auth0 = null }) {
+export default function App({ auth0 = null, testLoginEnabled = false }) {
   return new URLSearchParams(window.location.search).has("quiz")
     ? <QuizRunner getAccessTokenSilently={auth0?.getAccessTokenSilently} />
-    : <CourseApp auth0={auth0} />;
+    : <CourseApp auth0={auth0} testLoginEnabled={testLoginEnabled} />;
 }
 
-function CourseApp({ auth0 }) {
+function CourseApp({ auth0, testLoginEnabled }) {
   const [user, setUser] = useState(null);
   const [role, setRole] = useState(null);
   const [authMessage, setAuthMessage] = useState("");
@@ -198,6 +214,24 @@ function CourseApp({ auth0 }) {
     setUser(nextUser);
     enterView(nextRole);
   }, [enterView]);
+
+  const enterTestAccount = useCallback(async (account) => {
+    const response = await fetch("/api/auth/test-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ account }),
+    });
+    const result = await response.json().catch(() => null);
+    if (!response.ok || !result?.user || !result.accessToken) {
+      throw new Error(result?.error || "Unable to sign in to the local test account.");
+    }
+    enterLogin({
+      ...result.user,
+      isLocalTestLogin: true,
+      localTestAccessToken: result.accessToken,
+      getAccessTokenSilently: async () => result.accessToken,
+    });
+  }, [enterLogin]);
 
   useEffect(() => {
     if (!isAuthenticated || !authSubject || !getAccessTokenSilently) return undefined;
@@ -269,7 +303,8 @@ function CourseApp({ auth0 }) {
   }
   if (!role) return (
     <Login
-      onDemo={enterView}
+      onTestLogin={enterTestAccount}
+      testLoginEnabled={testLoginEnabled}
       auth0={auth0}
       message={authMessage}
       isResolving={isResolvingAccount}

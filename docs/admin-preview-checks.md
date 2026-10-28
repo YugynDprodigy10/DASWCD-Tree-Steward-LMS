@@ -1,6 +1,6 @@
 # Administrator preview checks
 
-Run `npm run dev` from `frontend`, then choose **Administrator demo**. Use sample addresses and made-up passwords only. No email or account changes leave the browser.
+Run `npm run dev` from `frontend` and enable the local test-login flags documented in README.md. Start the backend and database, then choose **Test administrator**. These checks cover an admin workspace backed by local sample UI data; admin account changes are not persisted to the LMS database or sent by email.
 
 ## Functional checks
 
@@ -12,8 +12,8 @@ Run `npm run dev` from `frontend`, then choose **Administrator demo**. Use sampl
 6. Assign Morgan to Week 1 using Role & modules. Confirm the name appears on the Modules page; remove the assignment there and verify the unassigned state.
 7. Deactivate Morgan. Confirm reset is disabled and Morgan no longer counts as an active assigned instructor. Reactivate to restore saved assignments.
 8. Preview an admin password-reset request. Confirm the result explicitly says no email was sent.
-9. Confirm Auth0 owns actual sign-in and password recovery. Do not represent the administrator demo's sample reset as a real password change.
-10. Sign out and re-enter the admin demo. Sample changes must reset. Verify student and instructor demos still open normally.
+9. Confirm Auth0 owns actual sign-in and password recovery. Do not represent the test administrator's sample reset as a real password change.
+10. Sign out and re-enter the test administrator account. Sample changes must reset. Verify test student and instructor accounts still open normally.
 
 ## Responsive and keyboard checks
 
@@ -23,7 +23,7 @@ Run `npm run dev` from `frontend`, then choose **Administrator demo**. Use sampl
 
 ## Scope
 
-The sample directory and module assignments do not change Auth0 authentication or the separate instructor demo's permissions. Progress is explicitly illustrative. The 12-character password minimum applies only to the local invitation preview, not to Auth0 accounts.
+The sample directory and module assignments do not change Auth0 authentication or the instructor's API permissions. Progress is explicitly illustrative. The 12-character password minimum applies only to the local invitation preview, not to Auth0 accounts.
 
 ## Module and people management checks
 
@@ -31,11 +31,11 @@ The sample directory and module assignments do not change Auth0 authentication o
 - Add a sample administrator. Saving requires explicit administrator confirmation. Verify the role filter finds them.
 - Remove a person, find them with Show removed, then restore them as inactive without replacing their ID or progress.
 - Open Send invite link. Copy the sample `.invalid` URL and preview delivery; the result must explicitly say no email was sent.
-- Module switches affect only the admin catalog preview until shared course data and backend permissions are connected. They do not currently control the separate student/instructor demo pages.
+- Module switches affect only the admin catalog preview until shared course data and backend permissions are connected. They do not currently control the separate student/instructor course pages.
 
 ## Course content and keyboard checks
 
-- In Instructor demo, Create offers Announcement, Learning material, and built-in Quiz; Final exam is disabled pending written-response API support. Assignment submissions have been removed.
+- In the test instructor account, Create offers Announcement, Learning material, and built-in Quiz; Final exam is disabled pending written-response API support. Assignment submissions have been removed.
 - Learning materials accept a nonempty PDF, MP4, or WebM up to 100 MB. Videos require a text transcript. Publish a file and verify student preview offers opening/downloading it; video files also use native playback controls.
 - Files are browser-session attachments, not shared server uploads. Refresh/sign-out clears them. Accessible PDFs and captioned videos must be supplied by instructors.
 - Built-in quiz checks and API limitations are documented in the README. Google Forms links have been replaced.
