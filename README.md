@@ -214,3 +214,13 @@ Validation: `node --test frontend/test/quiz.test.js`, frontend lint/build, and b
 ### Integration verification (2026-10-16)
 
 After merging main, both migrations and the seed queries ran successfully on an isolated local PostgreSQL 14 cluster without Docker. All 9 backend API tests, 2 frontend adapter/validation tests, frontend lint, and the production build passed. The browser flow verified development instructor login, draft/question creation, publishing, student login, opening a quiz in a separate window, and a submitted server score matching the persisted database record. Docker/PostgreSQL 18 remains unverified. Auth0 tenant setup and deployment configuration must be completed before enabling real accounts.
+
+
+### Course navigation and material upload frontend
+
+See [the frontend handoff](docs/frontend-navigation-handoff.md) for same-tab quizzes,
+URL navigation, draft recovery, demo retake settings, and PDF/video material storage.
+Run `npm test` in `frontend` for the frontend checks. Real session restoration,
+server-enforced retakes, and shared uploads still need the documented backend work.
+Demo files and quizzes persist in this browser; real shared uploads are disabled
+until `VITE_MATERIALS_API_ENABLED=true` is configured against an implemented API.

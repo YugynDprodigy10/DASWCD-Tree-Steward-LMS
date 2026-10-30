@@ -1,85 +1,253 @@
-import { useEffect, useRef, useState } from 'react';
-import { demoQuizzes, demoSave, launchContext, quizRequest } from './service';
-import './quiz.css';
+import { useEffect, useRef, useState } from "react";
+import { demoQuizzes, quizRequest, submitDemoAttempt } from "./service.js";
+import { attemptsRemaining, formatScore } from "./policy.js";
+import "./quiz.css";
 
-export default function QuizRunner({ getAccessTokenSilently }) {
-  const [context] = useState(launchContext);
+function readDraft(key) {
+  try {
+    return JSON.parse(sessionStorage.getItem(key)) || {};
+  } catch {
+    return {};
+  }
+}
+
+export default function QuizRunner({ quizId, user, preview, onBack }) {
+  const draftKey = `quiz-draft:${user?.id ?? "demo"}:${preview ? "preview" : "student"}:${quizId}`;
   const [quiz, setQuiz] = useState(null);
   const [answers, setAnswers] = useState({});
+  const [attempts, setAttempts] = useState([]);
   const [result, setResult] = useState(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [retry, setRetry] = useState(0);
-  const resultHeading = useRef(null);
+  const heading = useRef(null);
+  const submitLock = useRef(false);
+
   useEffect(() => {
     let active = true;
-    (async () => { try {
-      if (!context) throw new Error('This quiz window has expired. Open the quiz again from your course.');
-      const getQuizToken = getAccessTokenSilently ||
-        (context.localTestAccessToken
-          ? async () => context.localTestAccessToken
-          : null);
-      const quizUser = context.user && getQuizToken
-        ? { ...context.user, getAccessTokenSilently: getQuizToken }
-        : null;
-      if (context.user && !quizUser) throw new Error('Sign in again to open this quiz.');
-      const q = quizUser ? (await quizRequest(quizUser, `/quizzes/${context.quizId}`)).quiz : demoQuizzes().find(q => q.id === context.quizId);
-      if (!q || (!q.published && !context.preview)) throw new Error('This quiz is not currently published.');
-      if (!q.questions.length) throw new Error('This quiz has no questions yet.');
-      if (active) setQuiz(q);
-    } catch(e) { if(active) setError(e.message); } finally { if(active) setLoading(false); } })();
-    return () => { active = false; };
-  }, [context, retry, getAccessTokenSilently]);
-  useEffect(() => { if(result) resultHeading.current?.focus(); }, [result]);
-  useEffect(() => {
-    const warn = e => { e.preventDefault(); e.returnValue = ''; };
-    if (!result && Object.keys(answers).length) window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
-  }, [answers, result]);
-  async function submit(e) {
-    e.preventDefault(); if (busy || result) return;
-    setError(''); setBusy(true);
-    try {
-      if (!launchContext()) throw new Error('Your quiz session ended. Open it again from your course.');
-      if (quiz.questions.some(q => !answers[q.id])) throw new Error('Answer every question before submitting.');
-      if (context.preview) { setResult({ preview: true }); return; }
-      let attempt;
-      const getQuizToken = getAccessTokenSilently ||
-        (context.localTestAccessToken
-          ? async () => context.localTestAccessToken
-          : null);
-      const quizUser = context.user && getQuizToken
-        ? { ...context.user, getAccessTokenSilently: getQuizToken }
-        : null;
-      if (quizUser) attempt = (await quizRequest(quizUser, `/quizzes/${quiz.id}/attempts`, 'POST', { answers: quiz.questions.map(q => ({ questionId: q.id, choiceId: Number(answers[q.id]) })) })).attempt;
-      else {
-        const current = demoQuizzes().find(q => q.id === quiz.id);
-        if (!current?.published) throw new Error('This quiz is no longer published.');
-        if (JSON.stringify(current.questions) !== JSON.stringify(quiz.questions)) throw new Error('The quiz changed. Reopen it from your course before submitting.');
-        attempt = { score: quiz.questions.reduce((sum,q) => sum + (q.choices.find(c => c.id === answers[q.id])?.isCorrect ? q.points : 0),0), maxScore: quiz.questions.reduce((sum,q) => sum+q.points,0) };
-        demoSave({ ...current, locked: true, lastScore: { score: attempt.score, maxScore: attempt.maxScore } });
+    async function loadQuiz() {
+      try {
+        const loaded = user
+          ? (await quizRequest(user, `/quizzes/${encodeURIComponent(quizId)}`))
+              .quiz
+          : demoQuizzes().find((item) => String(item.id) === String(quizId));
+        if (!loaded || (!loaded.published && !preview))
+          throw new Error("This quiz is not available.");
+        if (!loaded.questions.length)
+          throw new Error("This quiz has no questions yet.");
+        const history = preview
+          ? []
+          : user
+            ? (
+                await quizRequest(
+                  user,
+                  `/quizzes/${encodeURIComponent(quizId)}/attempts/me`,
+                )
+              ).attempts
+            : loaded.attempts || [];
+        const draft = readDraft(draftKey);
+        const matches = draft.signature === JSON.stringify(loaded.questions);
+        if (active) {
+          setQuiz(loaded);
+          setAttempts(history);
+          setAnswers(matches ? draft.answers || {} : {});
+        }
+      } catch (failure) {
+        if (active) setError(failure.message);
+      } finally {
+        if (active) setLoading(false);
       }
-      setResult(attempt);
-    } catch(e) { setError(e.message); } finally { setBusy(false); }
+    }
+    loadQuiz();
+    return () => {
+      active = false;
+    };
+  }, [quizId, user, preview, draftKey, retry]);
+
+  useEffect(() => {
+    if (!loading) heading.current?.focus();
+  }, [loading, result]);
+
+  function answerQuestion(questionId, choiceId) {
+    const next = { ...answers, [questionId]: choiceId };
+    // Save immediately so browser Back and refresh do not race an effect.
+    try {
+      sessionStorage.setItem(
+        draftKey,
+        JSON.stringify({
+          signature: JSON.stringify(quiz.questions),
+          answers: next,
+        }),
+      );
+    } catch {
+      setError(
+        "This browser cannot save your draft. Keep this page open until you submit.",
+      );
+    }
+    setAnswers(next);
   }
-  return <div className="quiz-window"><a className="skip-link" href="#quiz-main">Skip to quiz</a><header><strong>Steward Tree</strong><p>{context?.preview ? 'Instructor preview · No submission recorded' : context?.user ? 'Course quiz' : 'Demo quiz · No official grade'}</p></header>
-    <main id="quiz-main" tabIndex={-1}>
-      <h1>{quiz?.title || 'Quiz'}</h1>
-      {loading && <p role="status">Loading quiz…</p>}
-      {error && <p className="notice" role="alert">{error}</p>}
-      {!quiz && !loading && context && <button onClick={() => { setError(''); setLoading(true); setRetry(retry+1); }}>Retry loading quiz</button>}
-      {quiz && !result && <form onSubmit={submit}>
-        <p>{quiz.questions.length} question{quiz.questions.length === 1 ? "" : "s"} · Select one answer per question.</p>
-        <p aria-live="polite">{Object.keys(answers).length} of {quiz.questions.length} answered</p>
-        <fieldset disabled={busy} className="quiz-fields">
-          {quiz.questions.map((q,i) => <fieldset className="question-card" key={q.id}><legend>{i+1}. {q.text} <span>({q.points} points)</span></legend>
-            {q.choices.map(c => <label className="answer-choice" key={c.id}><input type="radio" name={`question-${q.id}`} value={c.id} checked={answers[q.id] === c.id} onChange={() => setAnswers({ ...answers, [q.id]: c.id })} required /><span>{c.text}</span></label>)}
-          </fieldset>)}
-          <button className="primary" disabled={busy}>{busy ? 'Submitting…' : context.preview ? 'Finish preview' : 'Submit quiz'}</button>
-        </fieldset>
-      </form>}
-      {result && <section className="question-card"><h2 ref={resultHeading} tabIndex={-1}>{result.preview ? 'Preview complete' : 'Quiz submitted'}</h2>{!result.preview && <p className="quiz-score">{result.score} / {result.maxScore} points{result.maxScore > 0 ? ` · ${Math.round(result.score/result.maxScore*100)}%` : ''}</p>}<p>{result.preview ? 'No answers or scores were submitted.' : context.user ? 'Your score was returned by the quiz server.' : 'This practice score is calculated locally and is not an official grade.'}</p><p>You can close this window and return to your course.</p></section>}
-    </main>
-  </div>;
+
+  async function submit(event) {
+    event.preventDefault();
+    if (submitLock.current || result) return;
+    submitLock.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      if (quiz.questions.some((question) => answers[question.id] === undefined))
+        throw new Error("Answer every question before submitting.");
+      if (!preview && attemptsRemaining(quiz, attempts.length) === 0)
+        throw new Error("No attempts remaining.");
+      const attempt = preview
+        ? { preview: true }
+        : user
+          ? (
+              await quizRequest(user, `/quizzes/${quiz.id}/attempts`, "POST", {
+                answers: quiz.questions.map((question) => ({
+                  questionId: question.id,
+                  choiceId: Number(answers[question.id]),
+                })),
+              })
+            ).attempt
+          : submitDemoAttempt(quiz, answers);
+      if (!preview) setAttempts((previous) => [attempt, ...previous]);
+      setResult(attempt);
+      sessionStorage.removeItem(draftKey);
+    } catch (failure) {
+      setError(failure.message);
+    } finally {
+      submitLock.current = false;
+      setBusy(false);
+    }
+  }
+
+  const remaining = quiz ? attemptsRemaining(quiz, attempts.length) : null;
+  const canAttempt = preview || remaining !== 0;
+  return (
+    <div className="quiz-window">
+      <a className="skip-link" href="#quiz-main">
+        Skip to quiz
+      </a>
+      <header>
+        <strong>Steward Tree</strong>
+        <p>
+          {preview
+            ? "Instructor preview · No submission recorded"
+            : user
+              ? "Course quiz"
+              : "Demo quiz · No official grade"}
+        </p>
+        <button type="button" disabled={busy} onClick={onBack}>
+          ← Back to module
+        </button>
+      </header>
+      <main id="quiz-main" tabIndex={-1}>
+        <h1 ref={heading} tabIndex={-1}>
+          {quiz?.title || "Quiz"}
+        </h1>
+        {loading && <p role="status">Loading quiz…</p>}
+        {error && (
+          <p className="notice" role="alert">
+            {error}
+          </p>
+        )}
+        {!quiz && !loading && (
+          <button
+            onClick={() => {
+              setError("");
+              setLoading(true);
+              setRetry((value) => value + 1);
+            }}
+          >
+            Retry loading quiz
+          </button>
+        )}
+        {quiz && !preview && (
+          <p role="status">
+            {remaining === null
+              ? "Attempt limits are not provided by the quiz service yet."
+              : `${remaining} of ${quiz.maxAttempts} attempts remaining.`}
+          </p>
+        )}
+        {quiz && !result && canAttempt && (
+          <form onSubmit={submit}>
+            <p>
+              {quiz.questions.length} questions · Select one answer per
+              question.
+            </p>
+            <p className="helper">
+              Answers are saved in this tab while you work. They are not
+              submitted until you select Submit quiz.
+            </p>
+            <p aria-live="polite">
+              {Object.keys(answers).length} of {quiz.questions.length} answered
+            </p>
+            <fieldset disabled={busy} className="quiz-fields">
+              {quiz.questions.map((question, index) => (
+                <fieldset className="question-card" key={question.id}>
+                  <legend>
+                    {index + 1}. {question.text}{" "}
+                    <span>({question.points} points)</span>
+                  </legend>
+                  {question.choices.map((choice) => (
+                    <label className="answer-choice" key={choice.id}>
+                      <input
+                        type="radio"
+                        name={`question-${question.id}`}
+                        checked={answers[question.id] === choice.id}
+                        onChange={() => answerQuestion(question.id, choice.id)}
+                        required
+                      />
+                      <span>{choice.text}</span>
+                    </label>
+                  ))}
+                </fieldset>
+              ))}
+              <button className="primary">
+                {busy
+                  ? "Submitting…"
+                  : preview
+                    ? "Finish preview"
+                    : "Submit quiz"}
+              </button>
+            </fieldset>
+          </form>
+        )}
+        {result && (
+          <section className="question-card" aria-live="polite">
+            <h2>{result.preview ? "Preview complete" : "Quiz submitted"}</h2>
+            {!result.preview && (
+              <p className="quiz-score">{formatScore(result)}</p>
+            )}
+            {canAttempt && (
+              <button
+                onClick={() => {
+                  setResult(null);
+                  setAnswers({});
+                }}
+              >
+                {" "}
+                {preview ? "Restart preview" : "Retake quiz"}
+              </button>
+            )}
+          </section>
+        )}
+        {!preview && attempts.length > 0 && (
+          <section aria-label="Your attempts">
+            <h2>Your attempts</h2>
+            <ol>
+              {attempts.map((attempt, index) => (
+                <li key={attempt.id || index}>
+                  {formatScore(attempt)}
+                  {attempt.submittedAt &&
+                    ` · ${new Date(attempt.submittedAt).toLocaleString()}`}
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
+      </main>
+    </div>
+  );
 }
