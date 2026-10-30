@@ -16,7 +16,7 @@ export default function Modal({ title, children, onClose }) {
       ref={dialog}
       className="modal"
       aria-labelledby="dialog-title"
-      onCancel={onClose}
+      onCancel={event => { event.preventDefault(); onClose(); }}
       onKeyDown={(event) => {
         if (event.key !== "Tab") return;
         const controls = [...dialog.current.querySelectorAll('button, a[href], input, select, textarea, video[controls], [tabindex]')]
