@@ -82,14 +82,15 @@ export async function saveMaterial(user, moduleId, values, file, onProgress) {
 
 // Proposed backend contract: one multipart request saves the file and metadata.
 // Keep disabled until the backend implements authorization and durable storage.
-function uploadMaterial(user, moduleId, values, file, onProgress) {
-  return new Promise((resolve, reject) => {
+async function uploadMaterial(user, moduleId, values, file, onProgress) {
+    const headers = await requestHeaders(user);
+    return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
     const path = values.id
       ? `/materials/${encodeURIComponent(values.id)}`
       : `/modules/${moduleId}/materials`;
     request.open(values.id ? "PATCH" : "POST", `/api${path}`);
-    for (const [name, value] of Object.entries(requestHeaders(user)))
+    for (const [name, value] of Object.entries(headers))
       request.setRequestHeader(name, value);
     request.timeout = 120000;
     request.upload.onprogress = (event) =>

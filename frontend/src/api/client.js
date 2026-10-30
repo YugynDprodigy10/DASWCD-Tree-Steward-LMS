@@ -1,6 +1,8 @@
-export function requestHeaders(user) {
-  // Existing backend prototype contract. This header is not authentication.
-  return user?.id ? { "X-User-Id": String(user.id) } : {};
+// Signed-in users (Auth0 or local test sign-in) carry a function that returns
+// a current access token for the API.
+export async function requestHeaders(user) {
+  if (!user?.getAccessTokenSilently) return {};
+  return { Authorization: `Bearer ${await user.getAccessTokenSilently()}` };
 }
 
 export function responseError(status, message) {
@@ -14,13 +16,19 @@ export function responseError(status, message) {
 }
 
 export async function apiRequest(user, path, method = "GET", body) {
-  if (!user?.id) throw new Error("Sign in to continue.");
+  if (!user?.getAccessTokenSilently) throw new Error("Sign in to continue.");
+  let headers;
+  try {
+    headers = await requestHeaders(user);
+  } catch {
+    throw responseError(401);
+  }
   let response;
   try {
     response = await fetch(`/api${path}`, {
       method,
       credentials: "same-origin",
-      headers: { ...requestHeaders(user), "Content-Type": "application/json" },
+      headers: { ...headers, "Content-Type": "application/json" },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
   } catch {

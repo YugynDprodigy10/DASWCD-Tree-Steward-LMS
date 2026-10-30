@@ -1,0 +1,4 @@
+ALTER TABLE users ADD COLUMN IF NOT EXISTS auth0Sub TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS users_auth0_sub_unique
+  ON users (auth0Sub)
+  WHERE auth0Sub IS NOT NULL;

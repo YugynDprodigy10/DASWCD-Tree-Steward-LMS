@@ -2,6 +2,7 @@
 //
 //
 
+import "dotenv/config";
 import { readFile } from "node:fs/promises";
 import { withDatabase } from "./database.js";
 

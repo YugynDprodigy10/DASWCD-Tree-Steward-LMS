@@ -53,11 +53,15 @@ test('401 requests prompt reauthentication; 403 keeps the session and reports pe
   const events = [];
   globalThis.window = { dispatchEvent: event => events.push(event.type) };
   try {
-    globalThis.fetch = async () => ({ status: 401, ok: false, json: async () => ({ error: 'Expired' }) });
-    await assert.rejects(apiRequest({ id: 1 }, '/quizzes/1'), /sign in again/);
+    const user = { id: 1, getAccessTokenSilently: async () => 'test-token' };
+    let sentHeaders;
+    globalThis.fetch = async (url, options) => { sentHeaders = options.headers; return { status: 401, ok: false, json: async () => ({ error: 'Expired' }) }; };
+    await assert.rejects(apiRequest(user, '/quizzes/1'), /sign in again/);
+    assert.equal(sentHeaders.Authorization, 'Bearer test-token');
+    assert.equal('X-User-Id' in sentHeaders, false);
     assert.deepEqual(events, ['session-expired']);
     globalThis.fetch = async () => ({ status: 403, ok: false, json: async () => ({ error: 'Not assigned to module' }) });
-    await assert.rejects(apiRequest({ id: 1 }, '/quizzes/1'), /Not assigned/);
+    await assert.rejects(apiRequest(user, '/quizzes/1'), /Not assigned/);
     assert.equal(events.length, 1);
   } finally {
     globalThis.fetch = previousFetch;

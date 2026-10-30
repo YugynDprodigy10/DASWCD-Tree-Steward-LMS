@@ -12,7 +12,7 @@ The backend must enforce permissions; hiding a button in React is not access con
 
 ## Current status
 
-The React prototype includes a matching login design, student and instructor demo views, a responsive card layout, and navigation across 12 sample modules. Instructors can add/edit cards in their sample assigned module (Week 2), keep cards as drafts, and preview the student view on desktop or mobile. Students see published cards without instructor controls and can mark announcements as read. Course-card changes reset on refresh or sign out; demo quizzes persist in this browser until sign-out so they can open in a separate window. Prototype sign-in checks the development test users and their database roles, but stores plaintext test passwords and does not create a secure session or protect API routes. Never use real account credentials with it. Persistent course content, enrollment, overall grades, admin tools, and messaging are not connected. Built-in quizzes can use the separate quiz API described below.
+The React app supports Auth0 sign-in and local-only buttons for the three seeded LMS test accounts. The API verifies Auth0 access tokens and saves each Auth0 subject in `users.auth0Sub`; the database's numeric `userID` remains the LMS foreign key. Verified email is used only to link an Auth0 subject to a pre-provisioned LMS account the first time. Local test-account buttons instead use the selected seeded database row and are hard-disabled outside local development. Quiz API requests use signed bearer tokens, never browser-supplied user IDs. Persistent course content, enrollment, overall grades, most admin tools, and messaging are not connected.
 
 [View the shared frontend preview](https://elegant-fox-d4ee0f.netlify.app). This is currently a manual deployment and may lag behind this repository.
 
@@ -41,6 +41,51 @@ Use Node 24 for consistency with CI. If Windows still finds an old version, run 
 
 ## Run the frontend
 
+
+## Enable/Disable Test Users (for production)
+
+Set ENABLE_TEST_LOGIN=true or false in the backend/.env file.
+Set VITE_ENABLE_TEST_LOGIN=true or false in frontend/.env.local file.
+
+### Configuring Auth0 for the final application
+
+In Auth0, create a **Single Page Application** and an **API**. Set the API identifier to the audience you will use below, enable RS256 signing, and allow `http://localhost:5173` for the SPA's callback URL, logout URL, and web origin. Enable **Allow Refresh Token Rotation** in the SPA's settings. In the API settings, enable **Allow Offline Access** so the SPA can request refresh tokens.
+
+The API access token must contain the user's verified email. Create and deploy a **Post Login** Auth0 Action in the login flow with:
+
+```js
+exports.onExecutePostLogin = async (event, api) => {
+  if (event.user.email) {
+    api.accessToken.setCustomClaim("https://stewardtree.app/claims/email", event.user.email);
+  }
+  api.accessToken.setCustomClaim(
+    "https://stewardtree.app/claims/email_verified",
+    event.user.email_verified === true,
+  );
+};
+```
+
+Copy `frontend/.env.example` to `frontend/.env.local` and `backend/.env.example` to `backend/.env`. Set the Auth0 domain, SPA client ID, and the same API audience in both files. The domain, SPA client ID, and audience are public identifiers for a browser app; they are not secrets. Never put an Auth0 client secret, Management API secret, or other credential in a `VITE_` variable or frontend file. The local env files are ignored by Git. Vite reads its settings when it starts, so restart the frontend after changing them.
+
+The SPA caches Auth0 tokens in local storage and uses refresh-token rotation to restore the login after a reload and renew access tokens. This improves session persistence when browser privacy settings block silent authentication, but local-storage tokens are accessible to JavaScript on the origin; keep dependencies updated and prevent cross-site scripting. Refresh tokens expire according to the Auth0 application policy, so users may eventually need to sign in again.
+
+An LMS user must exist in the database with an assigned student, teacher, or administrator role. Accounts are created through the admin invitation flow below or provisioned directly in the database. On first Auth0 sign-in, the API requires Auth0 to mark the email verified and permanently stores the token subject (Auth0 user ID) in `users.auth0Sub`; later requests look up that stable ID rather than matching email again. The numeric `users.userID` remains the LMS identifier referenced by quiz and enrollment tables. Unknown emails are denied. Auth0 manages passwords and password resets.
+
+### Admin-created Auth0 accounts
+
+The admin **Invite person** action creates the LMS and Auth0 database-connection accounts on the backend, assigns the selected LMS role and instructor modules, and asks Auth0 to email a password setup/reset link. Auth0 gives the new account a cryptographically random initial password that is never returned to the browser; the invitee must use the link sent to their email to choose a password before signing in. The Auth0 built-in email provider can send this during development; no SMTP credentials are required.
+
+To keep account creation admin-only, open the Auth0 database connection settings (Dashboard → **Authentication → Database** → select the connection) and disable public sign-ups. The backend can still provision users through the Management API.
+
+1. In Auth0, create a **Machine to Machine Application** and authorize it to the **Auth0 Management API** with only `create:users` and `delete:users` scopes. The delete scope is used only to clean up an Auth0 user if its corresponding LMS database transaction fails.
+2. Copy the M2M application's client ID and client secret into the ignored `backend/.env` file as `AUTH0_MGMT_CLIENT_ID` and `AUTH0_MGMT_CLIENT_SECRET`. Set `AUTH0_SPA_CLIENT_ID` to the SPA application's client ID and `AUTH0_DATABASE_CONNECTION` to the exact name of the Auth0 database connection enabled for that SPA (commonly `Username-Password-Authentication`). Keep all M2M secrets in the backend only; never use `VITE_` variables for them.
+3. In **Branding → Email Provider**, leave **Use my own email provider** off to use Auth0's built-in development provider. Ensure the **Change Password** email template is enabled. The built-in provider is limited to 10 emails/minute and is not for production.
+4. Run `npm run migrate` from `backend`, restart the backend, and sign in to the LMS as an account whose database role is administrator. Use **Invite person**. The invitee receives an Auth0 password-reset/setup email; after setting a password they sign in through the usual Auth0 login.
+
+The API rejects invitations from non-administrators, validates the requested role and module assignments, and never accepts a browser-supplied user ID as authority. Pending invites can be resent from **Invitations**. The admin people, modules, and progress screens remain sample data; only invitation-created accounts are persisted at this stage.
+
+The database migration `004_remove_password_temp.sql` removes the unused legacy `users.passwordTemp` column and its stored values. Existing developer databases apply it the next time `npm run migrate` is run from `backend`; new databases no longer create the column.
+
 For a new checkout:
 
 ```sh
@@ -62,7 +107,7 @@ npm run dev
 
 Open the local URL printed by Vite (usually `http://localhost:5173`). Leave the terminal running; edits update the page automatically. Press Ctrl+C to stop it. The sample frontend works without Docker or the backend.
 
-### Run the backend (optional)
+### Run the backend (required for Auth0 and local test accounts)
 
 To connect the frontend to the API and database, start Docker Desktop, then open a **second terminal** in the repository root and run:
 
@@ -77,27 +122,35 @@ Check `http://localhost:3000/api/health`; it should return the database's curren
 
 The Docker database is published on host port `5434` by default because a local PostgreSQL service may already use `5432`. PostgreSQL still listens on `5432` inside the container. The local API uses `DB_HOST_PORT` (or `DB_PORT`) to connect to the published host port. If you need another host port, set `DB_HOST_PORT` before running Docker Compose; the migration script automatically finds an available host port when it starts the database.
 
-To create the test users, run `npm run query` in `backend`. Then sign in with `teststudent1@example.com`, `testteacher1@example.com`, or `testadmin1@example.com`, all with the password `Test Password 1`.
+To create the sample LMS rows, run `npm run query` in `backend`. The **Test student**, **Test instructor**, and **Test administrator** buttons use those database accounts directly and do not require Auth0. To exercise Auth0 instead, create Auth0 users with matching verified emails `teststudent1@example.com`, `testteacher1@example.com`, or `testadmin1@example.com`; their LMS roles still come from the database, and their passwords are managed by Auth0.
+
+For local test-account buttons only, set `ENABLE_TEST_LOGIN=true` in `backend/.env` and `VITE_ENABLE_TEST_LOGIN=true` in `frontend/.env.local`, then restart both servers. These endpoints issue two-hour local test tokens signed with a random key that exists only in backend memory, accept requests only from loopback, and are disabled when `NODE_ENV=production`. Test tokens stay in app memory, except for a short-lived launch record when opening a quiz in another tab. The buttons are not a production login method; leave both flags false for deployments. Local test tokens become invalid when the backend restarts.
+
+### Auth0 email capabilities
+
+Auth0 can send verification and password-reset emails for database-connection users through Universal Login. Connecting email is fairly direct if you already have a provider account and its credentials: in the Auth0 Dashboard, open **Branding → Email Provider**, enable **Use my own email provider**, choose a supported integration or **SMTP**, and enter the provider credentials plus a verified **From** address. For direct SMTP, the server must support SMTP AUTH LOGIN and TLS 1.2+; port 587 is recommended when available. Your provider may also require domain/sender verification and allowlisting Auth0's sending IP addresses. Save the settings, use **Send Test Email**, and check Auth0 logs if it fails. The configured provider is tenant-wide. Auth0's built-in provider is for development only (10 emails per minute, no custom sender or templates); production delivery needs an external provider.
+
+After delivery is configured, customize or enable the relevant templates under **Email Templates**. Auth0's built-in provider cannot use custom templates; use an external provider if you need custom branding, higher volume, or production delivery. Never put Management API credentials in the React app.
 
 ## Try the interface
 
 ### Administrator and account-recovery preview
 
-Choose **Administrator demo** on the login screen to explore the single-class admin workspace. It includes an overview, a searchable People directory, role/module assignments, invitations, and illustrative student progress.
+Choose **Test administrator** to enter the administrator workspace using the seeded LMS account. The invite form creates real LMS and Auth0 accounts and sends Auth0 password setup emails when backend Management API configuration is present. The admin people, module, and progress screens remain illustrative local data.
 
-- **Invite person** creates a sample pending invitation. Duplicate account/pending-invitation emails are rejected without regard to capitalization.
-- In **Invitations**, copy a clearly labeled sample link, preview sending/acceptance, revoke, or renew expired/revoked invitations. Completing sample acceptance adds the person to the local directory.
+- **Invite person** creates a real account when authenticated as an administrator and the backend Auth0 settings above are configured. Duplicate email addresses are rejected without regard to capitalization.
+- In **Invitations**, resend setup emails for pending real accounts. The sample preview workflow remains available when viewing the interface without an authenticated admin account.
 - In **People**, change an email while retaining the same account and progress, add a sample person, assign student/instructor/administrator roles with confirmation for administrator access, remove/restore people, request a sample password reset, or deactivate/reactivate an account.
 - In **Modules**, add/edit module details, independently toggle student and instructor visibility, preview each audience catalog, and select active assigned instructors. New modules start hidden from both audiences. Inactive instructors retain their assignments but are not displayed as active module instructors.
-- **Forgot password?** on the login page previews the request and reset screens. Use made-up credentials only. Passwords are not sent or saved.
+- Auth0 handles real sign-in and password recovery. The administrator demo's account-management examples remain local sample data only.
 
-These workflows use in-memory sample data and reset on refresh or sign out. They do not send email, generate usable invitation/reset links, authenticate users, or modify real accounts. The existing API health check remains separate. Backend integration must provide invitation/reset token validation and expiration, authenticated role enforcement, and email updates tied to stable user IDs. Module visibility currently affects the admin catalog preview, not the separate student/instructor demo routes. Multiple simultaneous classes are outside this preview.
+The people, module, and progress preview workflows use in-memory sample data and reset on refresh or sign out. Auth0 handles authentication for Auth0 users; the local test administrator button is only for local development. The existing API health check remains separate. Module visibility currently affects the admin catalog preview, not the separate student/instructor course pages. Multiple simultaneous classes are outside this preview.
 
 ### Student and instructor preview
 
-Choose **Student demo** or **Instructor demo** on the login screen; no credentials are needed. The sign-in form is a design preview and does not authenticate.
+Choose **Test student** or **Test instructor** on the login screen to use the seeded database accounts; no password or Auth0 account is needed when local test login is enabled. These requests use the real local LMS rows and quiz API, while the announcement and learning-material cards remain sample content.
 
-- In the instructor demo, add a block in Week 2. Leave **Visible in student demo** unchecked to create a draft.
+- As the test instructor, add a block in Week 2. Leave **Visible in student demo** unchecked to create a draft.
 - Select **Preview as student** to confirm that drafts and editing controls disappear. Use **Exit preview** to return.
 - Use the module selector or previous/next buttons to explore the course. Other modules are read-only in the instructor demo.
 - On a phone, navigation moves to the bottom; student preview remains available above the module heading.
@@ -116,7 +169,7 @@ npm run preview
 - `build`: creates the deployable site in `frontend/dist`.
 - `preview`: serves the production build locally; open its printed URL.
 
-Use `npm ci` after cloning or pulling lockfile changes. Use `npm install <package>` only when intentionally adding a dependency, and commit both package files. The existing `npm test` scripts are placeholders that fail; automated unit and browser tests have not been implemented yet.
+Use `npm ci` after cloning or pulling lockfile changes. Use `npm install <package>` only when intentionally adding a dependency, and commit both package files. For frontend quiz/auth adapter tests, run `node --test test/quiz.test.js` from `frontend`. Backend API tests run with `npm test` from `backend` after starting the database and applying migrations. Backend authentication and invitation coverage is in `backend/test/auth.test.js`; quiz API coverage stays in `backend/test/quizzes.test.js`. Both use the shared Auth0 and database fixtures in `backend/test-support/authTestContext.js`.
 
 ## Repository layout
 
@@ -148,11 +201,11 @@ Repository admins should follow [GitHub setup](docs/github-setup.md) to enable b
 
 ## Built-in quizzes
 
-Google Forms links have been replaced with a native multiple-choice builder. In Instructor demo, open Create → Quiz or use the Quizzes section in a module. Create a draft, add questions with 2–6 choices and exactly one correct answer, assign 1–100 points, and publish. Published questions are read-only until unpublished; the API rejects question changes after submissions.
+Google Forms links have been replaced with a native multiple-choice builder. As the test instructor, open Create → Quiz or use the Quizzes section in a module. Create a draft, add questions with 2–6 choices and exactly one correct answer, assign 1–100 points, and publish. Published questions are read-only until unpublished; the API rejects question changes after submissions.
 
 Student quiz titles open a separate tab/window (browser preferences decide which). Radio-button groups support keyboard navigation, unanswered questions block submission, and successful submissions show the score. Instructor previews never submit attempts. Quiz windows expire after two hours; signing out invalidates their launch context.
 
-Demo quizzes use browser-local storage and local practice scoring; they are cleared on sign-out. They are not official grades. Signed-in accounts use PR #12's API without falling back to sample data. Run the merged backend and its migrations before using signed-in quiz flows. The adapter uses the login-returned user ID and the API's temporary `X-User-Id` header; real session authentication remains required before deployment. The API decides module permissions; live accounts are not hardcoded to Week 2 for quiz operations.
+Demo quizzes use browser-local storage and local practice scoring; they are cleared on sign-out. They are not official grades. Signed-in accounts use the quiz API without falling back to sample data. Run the backend and migrations before using signed-in quiz flows. The API validates Auth0 access tokens and derives each request's identity and roles from the database; it does not trust a user ID supplied by the browser. The API decides module permissions; live accounts are not hardcoded to Week 2 for quiz operations.
 
 Final exams with written answers remain disabled until the backend supports them. Weighted course grades and retake/answer-release policy are separate work. Native quiz questions are no longer edited through the announcement/material dialog.
 
@@ -160,7 +213,8 @@ Validation: `node --test frontend/test/quiz.test.js`, frontend lint/build, and b
 
 ### Integration verification (2026-10-16)
 
-After merging main, both migrations and the seed queries ran successfully on an isolated local PostgreSQL 14 cluster without Docker. All 9 backend API tests, 2 frontend adapter/validation tests, frontend lint, and the production build passed. The browser flow verified development instructor login, draft/question creation, publishing, student login, opening a quiz in a separate window, and a submitted server score matching the persisted database record. Docker/PostgreSQL 18 remains unverified. The temporary X-User-Id authentication and quiz API review limitations still apply; passing these tests is not production security approval.
+After merging main, both migrations and the seed queries ran successfully on an isolated local PostgreSQL 14 cluster without Docker. All 9 backend API tests, 2 frontend adapter/validation tests, frontend lint, and the production build passed. The browser flow verified development instructor login, draft/question creation, publishing, student login, opening a quiz in a separate window, and a submitted server score matching the persisted database record. Docker/PostgreSQL 18 remains unverified. Auth0 tenant setup and deployment configuration must be completed before enabling real accounts.
+
 
 ### Course navigation and material upload frontend
 
