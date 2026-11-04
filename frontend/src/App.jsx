@@ -1,15 +1,29 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Modal from "./components/Modal";
 import BlockEditor from "./components/BlockEditor";
-import QuizWorkspace, { QuizCard } from "./quiz/QuizWorkspace";
+import QuizWorkspace from "./quiz/QuizWorkspace";
+import QuizCard from "./quiz/QuizCard.jsx";
 import { useModuleQuizzes } from "./quiz/useModuleQuizzes";
 import QuizRunner from "./quiz/QuizRunner";
-import { resetDemoQuizzes } from "./quiz/service";
 import { initialBlocks, modules } from "./data/course";
 import "./App.css";
 import ApiStatus from "./components/ApiStatus";
 import AdminWorkspace from "./components/AdminWorkspace";
-import AccountRecovery from "./components/AccountRecovery";
+import { useMaterials } from "./materials/useMaterials.js";
+import { useRoute } from "./navigation/useRoute.js";
+import { navigateRoute } from "./navigation/route.js";
+
+function restoredDemoRole() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem("steward-demo-view"));
+    return saved?.expires > Date.now() &&
+      ["student", "instructor", "admin"].includes(saved.role)
+      ? saved.role
+      : null;
+  } catch {
+    return null;
+  }
+}
 
 function Brand() {
   return (
@@ -30,45 +44,45 @@ function Brand() {
   );
 }
 
-function Login({ onDemo, onLogin }) {
-  const [recovery, setRecovery] = useState(false); //onLogin tells the app that the user has successfully logged in and provides the user data to the app.
-  const [showPassword, setShowPassword] = useState(false);
-  const [message, setMessage] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  //all of these const values track your email and password input
+function Login({ onTestLogin, testLoginEnabled, auth0, message, isResolving, onDemo, sessionMessage }) {
+  const [loginError, setLoginError] = useState("");
+  const [testLoginError, setTestLoginError] = useState("");
+  const [testLoginAccount, setTestLoginAccount] = useState("");
 
-  async function submitLogin(event) {
-    //When there's an email and password, this function sends a request to the backend with the email and password. If the response is successful, it calls onLogin with the user data. If there's an error, it sets the message state to display the error message.
-    event.preventDefault();
-    setMessage("");
-    setIsSubmitting(true);
-
+  async function signIn() {
+    setLoginError("");
     try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || "Unable to sign in.");
-      }
-
-      onLogin(result.user);
+      await auth0.login();
     } catch (error) {
-      setMessage(error.message || "Unable to sign in.");
-    } finally {
-      setIsSubmitting(false);
+      setLoginError(error.message || "Unable to start sign-in.");
     }
   }
 
-  if (recovery) return <AccountRecovery onBack={() => setRecovery(false)} />;
+  async function signOut() {
+    try {
+      await auth0.logout();
+    } catch (error) {
+      setLoginError(error.message || "Unable to sign out.");
+    }
+  }
+
+  async function signInAsTestAccount(account) {
+    setTestLoginError("");
+    setTestLoginAccount(account);
+    try {
+      await onTestLogin(account);
+    } catch (error) {
+      setTestLoginError(error.message || "Unable to sign in to the local test account.");
+    } finally {
+      setTestLoginAccount("");
+    }
+  }
+
   return (
     <div className="login-page">
-      <a className="skip-link" href="#login-main">Skip to sign in</a>
+      <a className="skip-link" href="#login-main">
+        Skip to sign in
+      </a>
       <header>
         <Brand />
         <span className="subtle">Tree Steward Program</span>
@@ -88,85 +102,72 @@ function Login({ onDemo, onLogin }) {
             <div className="trunk" />
             <div className="ground" />
           </div>
-
         </section>
         <section className="login-card" id="login-main" tabIndex={-1}>
           <span className="eyebrow">YOUR LEARNING SPACE</span>
           <h2>Welcome back.</h2>
-          <p className="muted">Sign in to continue your stewardship journey.</p>
-          <form onSubmit={submitLogin}>
-            <label htmlFor="email">Email address</label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="username"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              required
-            />
-            <label htmlFor="password">Password</label>
-            <div className="password-field">
-              <input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                autoComplete="current-password"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                aria-pressed={showPassword}
-              >
-                {showPassword ? "Hide" : "Show"}
-              </button>
-            </div>
-            <p className="login-help">
-              Prototype sign-in only. Do not use a real account password.
-            </p>
-            <button
-              type="button"
-              className="text-button"
-              onClick={() => setRecovery(true)}
-            >
-              Forgot password?
-            </button>
-            <button
-              className="primary full"
-              type="submit"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? "Signing in…" : "Sign in"}{" "}
-              <span aria-hidden="true">→</span>
-            </button>
-          </form>
-          {message && (
-            <p className="notice" role="alert">
-              {message}
+
+          
+          {sessionMessage && (
+            <p role="status" className="notice">
+              {sessionMessage}
             </p>
           )}
-          <div className="demo-section">
-            <span className="demo-label">EXPLORE THE PROTOTYPE</span>
-            <p>
-              Prototype accounts use test credentials. Sample changes reset on
-              refresh.
+
+          <p className="muted">Sign in securely to continue your stewardship journey.</p>
+          {auth0?.configured ? (
+          
+            <button
+              className="primary full"
+              type="button"
+              onClick={signIn}
+              disabled={auth0.isLoading || isResolving || auth0.isAuthenticated}
+            >
+              {auth0.isLoading || isResolving ? "Checking sign-in…" : "Continue with Auth0"}{" "}
+              <span aria-hidden="true">→</span>
+            </button>
+          ) : (
+            <p className="notice" role="status">
+              Auth0 is not configured. Add the frontend settings described in the README to enable sign-in.
             </p>
+          )}
+          {(loginError || testLoginError || message || auth0?.error) && (
+            <p className="notice" role="alert">
+              {loginError || testLoginError || message || auth0.error}
+            </p>
+          )}
+          {auth0?.isAuthenticated && (
+            <button className="text-button" onClick={signOut}>Sign out of Auth0</button>
+          )}
+          {testLoginEnabled && (
+            <div className="demo-section">
+              <span className="demo-label">LOCAL TEST ACCOUNTS</span>
+              <p>These buttons use the seeded LMS accounts and are available only in local development.</p>
+              <div className="demo-buttons">
+                {[
+                  ["student", "Test student"],
+                  ["instructor", "Test instructor"],
+                  ["administrator", "Test administrator"],
+                ].map(([account, label]) => (
+                  <button
+                    className="secondary"
+                    key={account}
+                    disabled={Boolean(testLoginAccount) || isResolving}
+                    onClick={() => signInAsTestAccount(account)}
+                  >
+                    {testLoginAccount === account ? "Signing in…" : label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+            <div className="demo-section">
+            <span className="demo-label">EXPLORE THE PROTOTYPE</span>
+            <p>Demo views use sample data saved only in this browser.</p>
             <div className="demo-buttons">
-              <button className="secondary" onClick={() => onDemo("student")}>
-                Student demo
-              </button>
-              <button
-                className="secondary"
-                onClick={() => onDemo("instructor")}
-              >
-                Instructor demo
-              </button>
-              <button className="secondary" onClick={() => onDemo("admin")}>
-                Administrator demo
-              </button>
+              <button className="secondary" onClick={() => onDemo("student")}>Student demo</button>
+              <button className="secondary" onClick={() => onDemo("instructor")}>Instructor demo</button>
+              <button className="secondary" onClick={() => onDemo("admin")}>Administrator demo</button>
             </div>
           </div>
         </section>
@@ -179,39 +180,100 @@ function Login({ onDemo, onLogin }) {
   );
 }
 
-export default function App() {
-  return new URLSearchParams(window.location.search).has("quiz") ? <QuizRunner /> : <CourseApp />;
+
+
+export default function App({ auth0 = null, testLoginEnabled = false }) {
+  return <CourseApp auth0={auth0} testLoginEnabled={testLoginEnabled} />;
 }
 
-function CourseApp() {
+
+
+function CourseApp({ auth0, testLoginEnabled }) {
   const [user, setUser] = useState(null);
-  const [role, setRole] = useState(null);
-  const [preview, setPreview] = useState(false);
-  const [moduleId, setModuleId] = useState(2);
-  const [page, setPage] = useState("Home");
+  const [role, setRole] = useState(restoredDemoRole);
+  const [sessionMessage, setSessionMessage] = useState("");
+  const route = useRoute();
+  const { moduleId } = route;
+  const preview = role === "instructor" && route.preview;
+  const page =
+    role === "student" && !["Home", "My progress"].includes(route.page)
+      ? "Home"
+      : route.page;
+  const setModuleId = (moduleId) =>
+    navigateRoute({ moduleId, page: "Home", quizId: null, builderId: null });
+  const setPreview = (preview) => navigateRoute({ preview, page: "Home" });
+  const [authMessage, setAuthMessage] = useState("");
   const [blocks, setBlocks] = useState(initialBlocks);
   const [editor, setEditor] = useState(null);
   const [detail, setDetail] = useState(null);
   const [read, setRead] = useState([]);
   const [message, setMessage] = useState("");
-  const [quizToOpen, setQuizToOpen] = useState(null);
+  const quizToOpen = route.builderId;
+  const setQuizToOpen = (builderId) => navigateRoute({ builderId }, true);
+  useEffect(() => {
+    const expire = () => {
+      setUser(null);
+      setRole(null);
+      sessionStorage.removeItem("steward-demo-view");
+      setSessionMessage(
+        "Your session ended. Sign in again to continue where you left off.",
+      );
+    };
+    window.addEventListener("session-expired", expire);
+    return () => window.removeEventListener("session-expired", expire);
+  }, []);
+  useEffect(() => {
+    const closeOverlays = () => { setEditor(null); setDetail(null); };
+    window.addEventListener('popstate', closeOverlays);
+    window.addEventListener('app-navigation', closeOverlays);
+    return () => {
+      window.removeEventListener('popstate', closeOverlays);
+      window.removeEventListener('app-navigation', closeOverlays);
+    };
+  }, []);
   const heading = useRef(null);
-  const resourceUrls = useRef(new Set());
-  useEffect(() => () => { resourceUrls.current.forEach(url => URL.revokeObjectURL(url)); }, []);
+  const isAuthenticated = auth0?.isAuthenticated;
+  const authSubject = auth0?.profile?.sub;
+  const getAccessTokenSilently = auth0?.getAccessTokenSilently;
+  const isResolvingAccount = Boolean(isAuthenticated && !user && !authMessage);
+  const materials = useMaterials(user, moduleId, Boolean(role));
   const isInstructor = role === "instructor" && !preview;
   const canEdit = isInstructor && moduleId === 2;
   const canEditQuiz = isInstructor && (user ? true : moduleId === 2);
-  const { quizzes: moduleQuizzes, error: quizError } = useModuleQuizzes(user, moduleId, isInstructor, Boolean(role) && page === "Home");
+  const { quizzes: moduleQuizzes, error: quizError } = useModuleQuizzes(
+    user,
+    moduleId,
+    isInstructor,
+    Boolean(role) && page === "Home" && !route.quizId,
+  );
   const currentModule = modules.find((item) => item.id === moduleId);
-  const shownBlocks = blocks.filter(
-    (item) => item.type !== "Quiz" && item.type !== "Final exam" && item.moduleId === moduleId && (isInstructor || item.published),
+  const materialIds = new Set(materials.items.map((item) => item.id));
+  const shownBlocks = [
+    ...blocks.filter((item) => !materialIds.has(item.id)),
+    ...materials.items,
+  ].filter(
+    (item) =>
+      item.type !== "Quiz" &&
+      item.type !== "Final exam" &&
+      item.moduleId === moduleId &&
+      (isInstructor || item.published),
   );
   // Content cards and quizzes share one list, sorted by their position in the
   // module (modulePageOrder in the database). Sample cards have no position yet,
   // so they come first.
   const moduleItems = [
-    ...shownBlocks.map((block, index) => ({ key: `block-${block.id}`, block, order: block.order ?? 0, index })),
-    ...moduleQuizzes.map((quiz, index) => ({ key: `quiz-${quiz.id}`, quiz, order: quiz.order ?? 0, index: shownBlocks.length + index })),
+    ...shownBlocks.map((block, index) => ({
+      key: `block-${block.id}`,
+      block,
+      order: block.order ?? 0,
+      index,
+    })),
+    ...moduleQuizzes.map((quiz, index) => ({
+      key: `quiz-${quiz.id}`,
+      quiz,
+      order: quiz.order ?? 0,
+      index: shownBlocks.length + index,
+    })),
   ].sort((a, b) => a.order - b.order || a.index - b.index);
   useEffect(() => {
     if (role) {
@@ -220,44 +282,115 @@ function CourseApp() {
     }
   }, [role, page, moduleId, preview]);
   function navigate(value) {
-    if (value !== "Quizzes") setQuizToOpen(null);
-    setPage(value);
+    navigateRoute({
+      page: value,
+      quizId: null,
+      builderId: value === "Quizzes" ? route.builderId : null,
+    });
     setMessage("");
   }
-  function enterView(value) {
+  const enterView = useCallback((value) => {
     setRole(value);
-    setPage("Home");
-    setPreview(false);
-    setModuleId(2);
+    sessionStorage.setItem(
+      "steward-demo-view",
+      JSON.stringify({ role: value, expires: Date.now() + 2 * 60 * 60 * 1000 }),
+    );
     setMessage("");
-  }
-  function enterLogin(user) {
-    //takes a result from the backend and uses it to decide what to display the user based on their role type.
-    const role = user.roles.includes("teacher")
+  }, []);
+  const enterLogin = useCallback((nextUser) => {
+    const nextRole = nextUser.roles.includes("teacher")
       ? "instructor"
-      : user.roles.includes("student")
+      : nextUser.roles.includes("student")
         ? "student"
         : "administrator";
-    setUser(user);
-    enterView(role);
-  }
+    setUser(nextUser);
+    sessionStorage.removeItem("steward-demo-view");
+    setRole(nextRole);
+    setMessage("");
+  }, []);
+
+  const enterTestAccount = useCallback(async (account) => {
+    const response = await fetch("/api/auth/test-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ account }),
+    });
+    const result = await response.json().catch(() => null);
+    if (!response.ok || !result?.user || !result.accessToken) {
+      throw new Error(result?.error || "Unable to sign in to the local test account.");
+    }
+    enterLogin({
+      ...result.user,
+      isLocalTestLogin: true,
+      localTestAccessToken: result.accessToken,
+      getAccessTokenSilently: async () => result.accessToken,
+    });
+  }, [enterLogin]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !authSubject || !getAccessTokenSilently) return undefined;
+    let active = true;
+    (async () => {
+      try {
+        const token = await getAccessTokenSilently();
+        const response = await fetch("/api/auth/me", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const result = await response.json().catch(() => null);
+        if (!response.ok || !result?.user) {
+          throw new Error(result?.error || "Unable to load your LMS account.");
+        }
+        if (!Array.isArray(result.user.roles) || result.user.roles.length === 0) {
+          throw new Error("This LMS account has no assigned role.");
+        }
+        if (active) {
+          enterLogin({
+            ...result.user,
+            getAccessTokenSilently,
+          });
+        }
+      } catch (error) {
+        if (active) setAuthMessage(error.message || "Unable to load your LMS account.");
+      }
+    })();
+    return () => { active = false; };
+  }, [isAuthenticated, authSubject, getAccessTokenSilently, enterLogin]);
+
   function leaveDemo() {
-    resourceUrls.current.forEach(url => URL.revokeObjectURL(url));
-    resourceUrls.current.clear();
     setUser(null);
-    setQuizToOpen(null);
-    resetDemoQuizzes();
+    sessionStorage.removeItem("steward-demo-view");
+    for (const key of Object.keys(sessionStorage)) {
+      if (key.startsWith("quiz-draft:")) sessionStorage.removeItem(key);
+    }
+    navigateRoute(
+      { page: "Home", quizId: null, builderId: null, preview: false },
+      true,
+    );
     setRole(null);
-    setPreview(false);
     setEditor(null);
     setDetail(null);
     setBlocks(initialBlocks);
     setRead([]);
     setMessage("");
+    setAuthMessage("");
+    if (auth0?.isAuthenticated) {
+      auth0.logout().catch((error) => {
+        setAuthMessage(error.message || "Unable to sign out.");
+      });
+    }
   }
-  function saveBlock(values) {
-    if (!canEdit) return;
-    if (values.resource?.url) resourceUrls.current.add(values.resource.url);
+  async function saveBlock(values, file, onProgress) {
+    if (!canEdit) throw new Error("You cannot edit this module.");
+    if (values.type === "Learning material") {
+      await materials.save(values, file, onProgress);
+      setEditor(null);
+      setMessage(
+        user
+          ? "Learning material saved."
+          : "Learning material saved in this browser.",
+      );
+      return;
+    }
     setBlocks((previous) =>
       editor.block?.id
         ? previous.map((item) =>
@@ -274,9 +407,42 @@ function CourseApp() {
     setEditor(null);
     setMessage("Content block saved for this demo session.");
   }
-  if (!role) return <Login onDemo={enterView} onLogin={enterLogin} />;
-  if (role === "admin" || role === "administrator") return <AdminWorkspace brand={<Brand />} onExit={leaveDemo} />;
-  const navItems = isInstructor
+
+
+  if (!role) return (
+  <Login
+    onTestLogin={enterTestAccount}
+    testLoginEnabled={testLoginEnabled}
+    auth0={auth0}
+    message={authMessage}
+    isResolving={isResolvingAccount}
+    onDemo={enterView}
+    sessionMessage={
+      sessionMessage ||
+      (route.quizId
+        ? "Sign in to open this quiz. Existing quiz drafts remain in this tab."
+        : "")
+    }
+    />
+  );
+  if (route.quizId && role !== "admin" && role !== "administrator")
+    return (
+      <QuizRunner
+        key={`${route.quizId}-${user?.id || role}-${route.preview}`}
+        quizId={route.quizId}
+        user={user}
+        preview={role === "instructor"}
+        onBack={() =>
+          navigateRoute({ quizId: null, page: "Home", preview: false })
+        }
+      />
+    );
+  if (role === "admin" || role === "administrator")
+    return <AdminWorkspace brand={<Brand />} user={user} onExit={leaveDemo} />;
+  
+
+
+const navItems = isInstructor
     ? [
         ["Home", "⌂"],
         ["Create", "+"],
@@ -302,8 +468,16 @@ function CourseApp() {
           {navItems.map(([name, icon]) => (
             <button
               key={name}
-              className={page === name || (name === "Create" && page === "Quizzes") ? "nav-item active" : "nav-item"}
-              aria-current={page === name || (name === "Create" && page === "Quizzes") ? "page" : undefined}
+              className={
+                page === name || (name === "Create" && page === "Quizzes")
+                  ? "nav-item active"
+                  : "nav-item"
+              }
+              aria-current={
+                page === name || (name === "Create" && page === "Quizzes")
+                  ? "page"
+                  : undefined
+              }
               onClick={() => navigate(name)}
             >
               <span aria-hidden="true">{icon}</span>
@@ -313,10 +487,10 @@ function CourseApp() {
         </nav>
         <div className="sidebar-bottom">
           <span className="user-role">
-            {isInstructor ? "Instructor" : "Student"} sample view
+            {user ? user.email : `${isInstructor ? "Instructor" : "Student"} sample view`}
           </span>
           <button className="text-button" onClick={leaveDemo}>
-            Back to sign in →
+            {user ? "Sign out →" : "Back to sign in →"}
           </button>
         </div>
       </aside>
@@ -326,7 +500,7 @@ function CourseApp() {
             Tree Steward Program <span className="slash">/</span> {page}
           </span>
           <div className="topbar-actions">
-            <span className="demo-badge">Demo workspace</span>
+            <span className="demo-badge">{user ? "Signed in" : "Demo workspace"}</span>
             <button className="text-button mobile-signout" onClick={leaveDemo}>
               Sign out
             </button>
@@ -342,7 +516,6 @@ function CourseApp() {
               className="secondary"
               onClick={() => {
                 setPreview(false);
-                setPage("Home");
               }}
             >
               Exit preview
@@ -358,7 +531,6 @@ function CourseApp() {
                 value={moduleId}
                 onChange={(event) => {
                   setModuleId(Number(event.target.value));
-                  setPage("Home");
                   setMessage("");
                 }}
               >
@@ -375,7 +547,6 @@ function CourseApp() {
                 className="secondary preview-button"
                 onClick={() => {
                   setPreview(true);
-                  setPage("Home");
                   setMessage("");
                 }}
               >
@@ -390,14 +561,18 @@ function CourseApp() {
                   ? `Module ${moduleId}: ${currentModule.title}`
                   : page === "Create"
                     ? "Create content"
-                    : page === "Quizzes" ? (quizToOpen ? "Quiz builder" : "Create a quiz") : page === "Students"
-                      ? "Students"
-                      : page === "Gradebook"
-                        ? "Course gradebook"
-                        : "Your learning progress"}
+                    : page === "Quizzes"
+                      ? quizToOpen
+                        ? "Quiz builder"
+                        : "Create a quiz"
+                      : page === "Students"
+                        ? "Students"
+                        : page === "Gradebook"
+                          ? "Course gradebook"
+                          : "Your learning progress"}
               </h1>
             </div>
-          {page === "Home" && (
+            {page === "Home" && (
               <span className="week-count">
                 WEEK {String(moduleId).padStart(2, "0")} / 12
               </span>
@@ -412,7 +587,6 @@ function CourseApp() {
                   className="text-button"
                   onClick={() => {
                     setModuleId(2);
-                    setPage("Home");
                   }}
                 >
                   Open my module →
@@ -424,7 +598,7 @@ function CourseApp() {
               {message}
             </p>
           )}
-            {page === "Quizzes" && (
+          {page === "Quizzes" && (
             <QuizWorkspace
               key={`${moduleId}-${role}`}
               moduleId={moduleId}
@@ -432,6 +606,7 @@ function CourseApp() {
               canEdit={canEditQuiz}
               openQuizId={quizToOpen}
               onCreated={(quiz) => setQuizToOpen(quiz.id)}
+              onPreview={(quiz) => navigateRoute({ quizId: quiz.id })}
               onBack={() => navigate("Create")}
               onDone={() => navigate("Home")}
               onDeleted={(quiz) => {
@@ -442,73 +617,94 @@ function CourseApp() {
           )}
           {page === "Home" && (
             <>
-              {quizError && <p role="alert" className="notice">{quizError}</p>}
+              {quizError && (
+                <p role="alert" className="notice">
+                  {quizError}
+                </p>
+              )}
+              {materials.error && (
+                <p role="alert" className="notice">
+                  {materials.error}
+                </p>
+              )}
               <section className="content-stack" aria-label="Module content">
-                {moduleItems.map(({ key, block, quiz }) => quiz ? (
-                  <QuizCard
-                    key={key}
-                    quiz={quiz}
-                    instructor={isInstructor}
-                    user={user}
-                    preview={preview}
-                    onOpen={(item) => {
-                      setQuizToOpen(item.id);
-                      navigate("Quizzes");
-                    }}
-                  />
-                ) : (
-                  <article
-                    key={block.id}
-                    className={`content-card ${block.type.toLowerCase().replaceAll(" ", "-")}`}
-                  >
-                    <div className="card-top">
-                      <span className={`type-tag ${block.type.toLowerCase().replaceAll(" ", "-")}`}>
-                        {block.type}
-                      </span>
-                      {!block.published && (
-                        <span className="draft-tag">
-                          Draft · Hidden from students
-                        </span>
-                      )}
-                      {canEdit && (
-                        <button
-                          className="text-button edit-button"
-                          onClick={() => setEditor({ block })}
-                          aria-label={`Edit ${block.title}`}
+                {moduleItems.map(({ key, block, quiz }) =>
+                  quiz ? (
+                    <QuizCard
+                      key={key}
+                      quiz={quiz}
+                      instructor={isInstructor}
+                      user={user}
+                      preview={preview}
+                      onOpen={(item) => {
+                        if (isInstructor)
+                          navigateRoute({
+                            builderId: item.id,
+                            page: "Quizzes",
+                          });
+                        else navigateRoute({ quizId: item.id });
+                      }}
+                    />
+                  ) : (
+                    <article
+                      key={block.id}
+                      className={`content-card ${block.type.toLowerCase().replaceAll(" ", "-")}`}
+                    >
+                      <div className="card-top">
+                        <span
+                          className={`type-tag ${block.type.toLowerCase().replaceAll(" ", "-")}`}
                         >
-                          Edit
+                          {block.type}
+                        </span>
+                        {!block.published && (
+                          <span className="draft-tag">
+                            Draft · Hidden from students
+                          </span>
+                        )}
+                        {canEdit && (
+                          <button
+                            className="text-button edit-button"
+                            onClick={() => setEditor({ block })}
+                            aria-label={`Edit ${block.title}`}
+                          >
+                            Edit
+                          </button>
+                        )}
+                      </div>
+                      <h2>
+                        <button
+                          className="card-title"
+                          onClick={() => setDetail(block)}
+                        >
+                          {block.title}
                         </button>
-                      )}
-                    </div>
-                    <h2>
-                      <button
-                        className="card-title"
-                        onClick={() => setDetail(block)}
-                      >
-                        {block.title}
-                      </button>
-                    </h2>
-                    <p>{block.description}</p>
-                    <div className="card-footer">
-                      <span>
-                        {block.type === "Announcement"
-                          ? !isInstructor && read.includes(block.id)
-                            ? "Read"
-                            : "Course update"
-                          : block.type === "Learning material" ? block.resource?.name || "File not added yet" : block.type === "Final exam" ? `Multiple choice + ${block.writtenQuestions || 1} written responses` : "Multiple choice"}
-                      </span>
-                      <button
-                        className="text-button"
-                        onClick={() => setDetail(block)}
-                      >
-                        {block.type === "Announcement"
-                          ? "Read announcement"
-                          : "View details"}{" "}
-                        <span aria-hidden="true">→</span>
-                      </button>
-                    </div>
-                  </article>
-                ))}
+                      </h2>
+                      <p>{block.description}</p>
+                      <div className="card-footer">
+                        <span>
+                          {block.type === "Announcement"
+                            ? !isInstructor && read.includes(block.id)
+                              ? "Read"
+                              : "Course update"
+                            : block.type === "Learning material"
+                              ? block.resource?.name || "File not added yet"
+                              : block.type === "Final exam"
+                                ? `Multiple choice + ${block.writtenQuestions || 1} written responses`
+                                : "Multiple choice"}
+                        </span>
+                        <button
+                          className="text-button"
+                          onClick={() => setDetail(block)}
+                        >
+                          {block.type === "Announcement"
+                            ? "Read announcement"
+                            : "View details"}{" "}
+                          <span aria-hidden="true">→</span>
+                        </button>
+                      </div>
+                    </article>
+                  ),
+                )}
               </section>
               {moduleItems.length === 0 && (
                 <section className="empty-state">
@@ -559,21 +755,41 @@ function CourseApp() {
                 ["Quiz", "Multiple-choice questions"],
                 ["Final exam", "End-of-course exam"],
               ].map(([type, summary]) => {
-                const ready = type === "Quiz" && canEditQuiz;
+                const ready =
+                  type === "Quiz"
+                    ? canEditQuiz
+                    : type !== "Final exam" && canEdit;
                 return (
                   <button
                     className="create-card simple"
                     key={type}
                     disabled={!ready}
                     onClick={() => {
-                      setQuizToOpen(null);
-                      navigate("Quizzes");
+                      if (type === "Quiz") {
+                        navigateRoute({
+                          page: "Quizzes",
+                          builderId: null,
+                          quizId: null,
+                        });
+                      } else
+                        setEditor({
+                          block: {
+                            type,
+                            title: "",
+                            description: "",
+                            published: false,
+                          },
+                        });
                     }}
                   >
                     <h2>{type}</h2>
                     <p>{summary}</p>
                     <span className={ready ? "text-button" : "helper"}>
-                      {ready ? "Create →" : type === "Quiz" ? "Not available in this module" : "Coming soon"}
+                      {ready
+                        ? "Create →"
+                        : type === "Quiz"
+                          ? "Not available in this module"
+                          : "Coming soon"}
                     </span>
                   </button>
                 );
@@ -630,7 +846,10 @@ function CourseApp() {
           )}
           <footer className="workspace-footer">
             <span>Steward Tree · Rooted in community.</span>
-            <span>Sample content · Changes reset on refresh or sign out</span>
+            <span>
+              Sample announcements reset on refresh; demo files stay in this
+              browser
+            </span>
           </footer>
         </main>
       </div>
@@ -638,23 +857,57 @@ function CourseApp() {
         <BlockEditor
           key={editor.block?.id || editor.block?.type || "new"}
           block={editor.block}
+          user={user}
           onClose={() => setEditor(null)}
           onSave={saveBlock}
         />
       )}
       {detail && (
         <Modal title={detail.title} onClose={() => setDetail(null)}>
-          <span className={`type-tag ${detail.type.toLowerCase().replaceAll(" ", "-")}`}>
+          <span
+            className={`type-tag ${detail.type.toLowerCase().replaceAll(" ", "-")}`}
+          >
             {detail.type}
           </span>
           <p className="detail-copy">{detail.description}</p>
           {detail.type === "Learning material" && (
             <div className="learning-resource">
-              {detail.resource ? <>
-                {detail.resource.kind === "video" && <><video controls preload="metadata" aria-label={detail.title} src={detail.resource.url} /><h3>Transcript</h3><p className="detail-copy">{detail.transcript}</p></>}
-                <a className="primary resource-link" href={detail.resource.url} target="_blank" rel="noopener noreferrer">Open {detail.resource.kind === "pdf" ? "PDF" : "video"} (new tab)</a>
-                <a className="resource-link" href={detail.resource.url} download={detail.resource.name}>Download {detail.resource.name}</a>
-              </> : <p className="notice">Your instructor has not added a file yet.</p>}
+              {detail.resource ? (
+                <>
+                  {detail.resource.kind === "video" && (
+                    <>
+                      <video
+                        controls
+                        preload="metadata"
+                        aria-label={detail.title}
+                        src={detail.resource.url}
+                      />
+                      <h3>Transcript</h3>
+                      <p className="detail-copy">{detail.transcript}</p>
+                    </>
+                  )}
+                  <a
+                    className="primary resource-link"
+                    href={detail.resource.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Open {detail.resource.kind === "pdf" ? "PDF" : "video"} (new
+                    tab)
+                  </a>
+                  <a
+                    className="resource-link"
+                    href={detail.resource.url}
+                    download={detail.resource.name}
+                  >
+                    Download {detail.resource.name}
+                  </a>
+                </>
+              ) : (
+                <p className="notice">
+                  Your instructor has not added a file yet.
+                </p>
+              )}
             </div>
           )}
           {detail.type === "Announcement" && !isInstructor && (

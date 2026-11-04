@@ -8,10 +8,11 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test",
     "lighthouse": "lhci autorun"
   },
   "dependencies": {
+    "@auth0/auth0-react": "^2.28.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
