@@ -20,3 +20,7 @@ npm-debug.log*
 # Editors
 .vscode/
 .idea/
+
+# Lighthouse CI
+.lighthouseci/
+lighthouse-reports/
