@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Modal from "./components/Modal";
 import BlockEditor from "./components/BlockEditor";
+import LessonEditor from "./components/LessonEditor";
 import QuizWorkspace from "./quiz/QuizWorkspace";
 import QuizCard from "./quiz/QuizCard.jsx";
 import { useModuleQuizzes } from "./quiz/useModuleQuizzes";
@@ -386,11 +387,12 @@ function CourseApp({ auth0, testLoginEnabled }) {
     if (!canEdit) throw new Error("You cannot edit this module.");
     if (values.type === "Learning material") {
       await materials.save(values, file, onProgress);
+      navigateRoute({ page: "Home", quizId: null, builderId: null });
       setEditor(null);
       setMessage(
-        user
-          ? "Learning material saved."
-          : "Learning material saved in this browser.",
+        values.published
+          ? `Published “${values.title}” to students.`
+          : `Saved “${values.title}” as a draft. Students can't see it yet.`,
       );
       return;
     }
@@ -526,6 +528,16 @@ const navItems = isInstructor
           </div>
         )}
         <main id="main" tabIndex={-1}>
+          {editor?.block?.type === "Learning material" ? (
+            <LessonEditor
+              key={editor.block.id || "new-lesson"}
+              block={editor.block}
+              user={user}
+              onClose={() => setEditor(null)}
+              onSave={saveBlock}
+            />
+          ) : (
+          <>
           <div className="module-toolbar">
             <div>
               <label htmlFor="module-select">YOUR COURSE MODULES</label>
@@ -855,13 +867,14 @@ const navItems = isInstructor
               browser
             </span>
           </footer>
+          </>
+          )}
         </main>
       </div>
-      {editor && (
+      {editor && editor.block?.type !== "Learning material" && (
         <BlockEditor
-          key={editor.block?.id || editor.block?.type || "new"}
+          key={editor.block?.id || "new"}
           block={editor.block}
-          user={user}
           onClose={() => setEditor(null)}
           onSave={saveBlock}
         />
