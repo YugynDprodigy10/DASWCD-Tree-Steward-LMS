@@ -5,6 +5,7 @@ import { attemptsRemaining, formatScore, policyError } from '../src/quiz/policy.
 import { fileError, MAX_FILE_BYTES, saveMaterial } from '../src/materials/service.js';
 import { apiRequest } from '../src/api/client.js';
 import { demoQuizzes, demoSave, submitDemoAttempt } from '../src/quiz/service.js';
+import { initialLessonContent, lessonSummary, plainTextHtml, sanitizeLessonHtml, storedLessonContent } from '../src/materials/content.js';
 
 test('URLs preserve module, quiz, builder and preview; invalid routes get safe defaults', () => {
   const route = { moduleId: 4, page: 'Quizzes', quizId: 'quiz/one', builderId: '12', preview: true };
@@ -30,6 +31,28 @@ test('file validation rejects empty, unsupported, and oversized files', async ()
     assert.ok(fileError(file));
   }
   await assert.rejects(saveMaterial({ id: 1 }, 2, {}, null, () => {}), /not connected/);
+});
+
+test('lesson content retains mixed text and PDF order and removes unsafe markup', () => {
+  const source = [
+    { id: 'intro', type: 'text', html: '<h2 onclick="bad()">Intro</h2><script>alert(1)</script><p><strong>Read</strong></p>' },
+    { id: 'guide', type: 'pdf', name: 'guide.pdf', blob: new Blob(['pdf']) },
+    { id: 'notes', type: 'text', html: '<p>After the guide</p>' },
+  ];
+  const stored = storedLessonContent(source);
+  assert.deepEqual(stored.map(({ type }) => type), ['text', 'pdf', 'text']);
+  assert.equal(stored[0].html, '<h2>Intro</h2><p><strong>Read</strong></p>');
+  assert.equal(stored[1].blob.size, 3);
+  assert.equal(lessonSummary(source), 'Intro Read');
+});
+
+test('legacy materials can be edited and plain text is safely converted for the lesson view', () => {
+  const legacy = initialLessonContent({ description: 'First line\nSecond <line>', resource: { kind: 'pdf', name: 'guide.pdf', url: 'blob:old', blob: new Blob(['pdf']) } });
+  assert.deepEqual(legacy.map(({ type }) => type), ['text', 'pdf']);
+  assert.match(legacy[0].html, /&lt;line&gt;/);
+  assert.equal(legacy[1].blob.size, 3);
+  assert.equal(sanitizeLessonHtml('<img src=x onerror=alert(1)><p>safe</p><iframe>bad</iframe>'), '<p>safe</p>');
+  assert.match(plainTextHtml('<script>'), /&lt;script&gt;/);
 });
 
 test('demo attempts retain scores, enforce limits, and reject stale questions', () => {

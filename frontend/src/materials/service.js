@@ -1,4 +1,5 @@
 import { apiRequest, requestHeaders, responseError } from "../api/client.js";
+import { storedLessonContent } from "./content.js";
 
 export const materialsApiEnabled =
   import.meta.env?.VITE_MATERIALS_API_ENABLED === "true";
@@ -12,6 +13,12 @@ export function fileError(file) {
     file.size > MAX_FILE_BYTES
     ? "Choose a nonempty PDF, MP4, or WebM file up to 100 MB."
     : "";
+}
+
+export function pdfError(file) {
+  if (!file || file.type !== "application/pdf" || file.size <= 0 || file.size > MAX_FILE_BYTES)
+    return "Choose a nonempty PDF file up to 100 MB.";
+  return "";
 }
 
 function withStore(mode, action) {
@@ -49,7 +56,17 @@ export async function listMaterials(user, moduleId) {
     .filter((material) => material.moduleId === moduleId)
     .map(({ blob, ...material }) => ({
       ...material,
-      resource: { ...material.resource, url: URL.createObjectURL(blob) },
+      resource: material.resource
+        ? { ...material.resource, blob, url: URL.createObjectURL(blob) }
+        : null,
+      content: material.content?.map((item) => {
+        if (item.type === "pdf" && item.blob) return { ...item, url: URL.createObjectURL(item.blob) };
+        if (item.type === "video" && item.resource?.blob) {
+          const url = URL.createObjectURL(item.resource.blob);
+          return { ...item, url, resource: { ...item.resource, url } };
+        }
+        return item;
+      }),
     }));
 }
 
@@ -64,17 +81,30 @@ export async function saveMaterial(user, moduleId, values, file, onProgress) {
     ? await withStore("readonly", (store) => store.get(values.id))
     : null;
   const blob = file || previous?.blob;
-  if (!blob) throw new Error("Choose a file to save.");
+  const content = storedLessonContent(values.content || []).map((item) => {
+    if (item.type === "pdf") {
+      const pdf = item.file || item.blob;
+      const error = item.file ? pdfError(item.file) : "";
+      if (error) throw new Error(error);
+      if (!pdf) throw new Error(`Choose the PDF again: ${item.name || "lesson file"}.`);
+      return { id: item.id || crypto.randomUUID(), type: "pdf", name: item.file?.name || item.name, blob: pdf };
+    }
+    if (item.type === "text") return item;
+    if (item.type === "video" && item.resource?.blob) return { ...item, resource: { name: item.resource.name, kind: "video", blob: item.resource.blob } };
+    return item;
+  });
+  if (!content.some((item) => item.type === "pdf" || (item.type === "text" && item.html.replace(/<[^>]*>/g, "").trim())))
+    throw new Error("Add lesson text or a PDF before saving.");
   const material = {
     ...values,
     id: values.id || crypto.randomUUID(),
     moduleId,
     type: "Learning material",
-    blob,
-    resource: {
-      name: file?.name || previous.resource.name,
-      kind: blob.type === "application/pdf" ? "pdf" : "video",
-    },
+    content,
+    blob: blob || null,
+    resource: file || previous?.resource
+      ? { name: file?.name || previous.resource.name, kind: blob.type === "application/pdf" ? "pdf" : "video" }
+      : null,
   };
   await withStore("readwrite", (store) => store.put(material));
   return material;

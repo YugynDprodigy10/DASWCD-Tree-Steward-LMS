@@ -14,6 +14,8 @@ export function useMaterials(user, moduleId, enabled) {
         for (const item of items) {
           if (item.resource?.url?.startsWith("blob:"))
             urls.push(item.resource.url);
+          for (const block of item.content || [])
+            if (block.url?.startsWith("blob:")) urls.push(block.url);
         }
         if (active) setState({ items, error: "", moduleId, owner });
         else urls.forEach((url) => URL.revokeObjectURL(url));

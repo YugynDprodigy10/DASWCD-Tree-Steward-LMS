@@ -10,6 +10,8 @@ import "./App.css";
 import ApiStatus from "./components/ApiStatus";
 import AdminWorkspace from "./components/AdminWorkspace";
 import { useMaterials } from "./materials/useMaterials.js";
+import LessonContent from "./components/LessonContent.jsx";
+import { plainTextHtml } from "./materials/content.js";
 import { useRoute } from "./navigation/useRoute.js";
 import { navigateRoute } from "./navigation/route.js";
 import Gradebook from "./gradebook/Gradebook.jsx";
@@ -871,47 +873,18 @@ const navItems = isInstructor
           >
             {detail.type}
           </span>
-          <p className="detail-copy">{detail.description}</p>
-          {detail.type === "Learning material" && (
+          {detail.type === "Learning material" ? (
             <div className="learning-resource">
-              {detail.resource ? (
-                <>
-                  {detail.resource.kind === "video" && (
-                    <>
-                      <video
-                        controls
-                        preload="metadata"
-                        aria-label={detail.title}
-                        src={detail.resource.url}
-                      />
-                      <h3>Transcript</h3>
-                      <p className="detail-copy">{detail.transcript}</p>
-                    </>
-                  )}
-                  <a
-                    className="primary resource-link"
-                    href={detail.resource.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Open {detail.resource.kind === "pdf" ? "PDF" : "video"} (new
-                    tab)
-                  </a>
-                  <a
-                    className="resource-link"
-                    href={detail.resource.url}
-                    download={detail.resource.name}
-                  >
-                    Download {detail.resource.name}
-                  </a>
-                </>
-              ) : (
-                <p className="notice">
-                  Your instructor has not added a file yet.
-                </p>
-              )}
+              <LessonContent
+                content={detail.content?.length ? detail.content : [
+                  ...(detail.description ? [{ id: "legacy-description", type: "text", html: plainTextHtml(detail.description) }] : []),
+                  ...(detail.resource ? [{ id: "legacy-resource", type: detail.resource.kind === "video" ? "video" : "pdf", resource: detail.resource, transcript: detail.transcript }] : []),
+                ]}
+                fallbackResource={detail.resource}
+                fallbackTranscript={detail.transcript}
+              />
             </div>
-          )}
+          ) : <p className="detail-copy">{detail.description}</p>}
           {detail.type === "Announcement" && !isInstructor && (
             <button
               className="primary"
