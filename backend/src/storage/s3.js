@@ -17,7 +17,7 @@ export const storage = {
     await client.send(new PutObjectCommand({
       Bucket: bucket(),
       Key: key,
-      Body: body,          // a Buffer (multer memory storage gives you req.file.buffer)
+      Body: body,
       ContentType: contentType,
     }));
   },
