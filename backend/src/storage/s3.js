@@ -1,8 +1,6 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-// No config needed: the SDK reads AWS_REGION, AWS_ACCESS_KEY_ID and
-// AWS_SECRET_ACCESS_KEY from process.env (loaded by dotenv in server.js).
 const client = new S3Client({});
 
 // returns bucket name or throws error if S3_BUCKET is missing
