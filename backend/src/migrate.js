@@ -14,6 +14,7 @@ const migrationFiles = [
   "003_auth0_identity.sql",
   "004_remove_password_temp.sql",
   "005_admin_auth0_invitations.sql",
+  "006_module_materials.sql",
 ];
 
 async function runMigration() { // Applies the database migration files in order.
