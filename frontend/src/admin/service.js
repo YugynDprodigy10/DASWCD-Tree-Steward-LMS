@@ -2,7 +2,18 @@ export async function adminRequest(user, path, method = "GET", body) {
   if (!user?.getAccessTokenSilently) {
     throw new Error("Sign in as an administrator to manage accounts.");
   }
-  const token = await user.getAccessTokenSilently();
+  let token;
+  try {
+    token = await user.getAccessTokenSilently();
+  } catch (error) {
+    const detail = error instanceof Error && error.message
+      ? ` ${error.message}`
+      : "";
+    throw new Error(
+      `Could not get an Auth0 access token. Sign in again and retry.${detail}`,
+      { cause: error },
+    );
+  }
   let response;
   try {
     response = await fetch(`/api${path}`, {
