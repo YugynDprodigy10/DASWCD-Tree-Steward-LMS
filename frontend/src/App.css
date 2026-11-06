@@ -1011,3 +1011,34 @@
   cursor: not-allowed;
   opacity: 0.6;
 }
+
+.lesson-editor-content, .lesson-content { display: grid; gap: 14px; min-width: 0; }
+.lesson-editor-item { min-width: 0; border: 1px solid #e0e5d8; border-radius: 9px; padding: 14px; background: #fff; }
+.lesson-item-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.lesson-item-actions > span { margin-right: auto; font-size: 11px; color: #687b59; font-weight: 650; overflow-wrap: anywhere; }
+.lesson-item-actions .text-button { padding: 5px; min-height: 36px; }
+.lesson-format-toolbar, .lesson-add-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin: 8px 0; }
+.lesson-format-toolbar button, .lesson-format-toolbar select { min-height: 40px; padding: 7px 10px; }
+.lesson-format-toolbar label { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; }
+.lesson-text-input { min-height: 140px; max-height: 360px; overflow: auto; border: 1px solid #cfd8c8; border-radius: 7px; padding: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.lesson-text-input:focus { outline: 3px solid #a9c394; outline-offset: 2px; }
+.lesson-text-input:empty::before { content: "Write lesson text here…"; color: #7d8877; }
+.lesson-text-input h2, .lesson-content h2 { font-size: 1.35em; }
+.lesson-text-input h3, .lesson-content h3 { font-size: 1.15em; }
+.lesson-text-input ul, .lesson-text-input ol, .lesson-content ul, .lesson-content ol { padding-left: 1.5em; }
+.lesson-pdf { min-width: 0; margin: 0; border: 1px solid #dfe3d7; border-radius: 8px; overflow: hidden; background: #f8f9f5; }
+.lesson-pdf figcaption { padding: 10px 13px; font-weight: 650; font-size: 12px; overflow-wrap: anywhere; }
+.lesson-pdf iframe { display: block; width: 100%; height: min(68vh, 640px); min-height: 300px; border: 0; background: #eceee8; }
+.lesson-pdf > a { display: inline-flex; min-height: 44px; align-items: center; padding: 8px 13px; font-size: 12px; }
+.lesson-pdf a:focus-visible, .lesson-item-actions button:focus-visible, .lesson-format-toolbar button:focus-visible { outline: 3px solid #6d8c5e; outline-offset: 2px; }
+.lesson-add-text { margin-top: 10px; padding: 9px 12px; font-size: 12px; }
+.lesson-student-preview { min-width: 0; }
+.lesson-student-preview > h2 { overflow-wrap: anywhere; }
+.lesson-video video { width: 100%; max-height: 360px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+@media (max-width: 700px) {
+  .lesson-editor-item { padding: 10px; }
+  .lesson-pdf iframe { height: 62vh; min-height: 260px; }
+  .lesson-format-toolbar { gap: 5px; }
+}
