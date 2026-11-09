@@ -1,5 +1,6 @@
-name: Frontend CI
+name: CI
 
+# Runs on every pull request to main, every push to main, and on demand.
 on:
   pull_request:
     branches: [main]
@@ -11,12 +12,31 @@ permissions:
   contents: read
 
 concurrency:
-  group: frontend-ci-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  frontend-checks:
-    name: Frontend checks
+  checks:
+    name: Backend tests and frontend checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # The same command developers run locally.
+      - name: Run all tests in Docker
+        run: ./test.sh
+
+      - name: Check the development containers build
+        run: docker compose build api frontend
+
+  # Lighthouse needs Chrome, which GitHub's runners already have, so it runs
+  # outside Docker. See docs/lighthouse.md.
+  lighthouse:
+    name: Lighthouse
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -35,8 +55,6 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install dependencies
         run: npm ci
-      - name: Lint
-        run: npm run lint
       - name: Build
         run: npm run build
       - name: Lighthouse

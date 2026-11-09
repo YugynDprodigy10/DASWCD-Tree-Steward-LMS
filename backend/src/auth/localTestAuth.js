@@ -5,12 +5,14 @@ const issuer = "http://localhost:3000/api/auth/test-login";
 const audience = "steward-tree-local-test";
 const signingKey = randomBytes(32);
 
-export function isLocalTestLoginEnabled(req) {
-  const address = req.socket.remoteAddress?.replace(/^::ffff:/, "");
-  const isLoopback = address === "127.0.0.1" || address === "::1";
+// Test sign-in is for local development and automated tests only. It must be
+// switched on explicitly AND the server must say it is in development or test
+// mode, so a deployment that forgets to set NODE_ENV can never enable it.
+// (A same-machine check doesn't work inside Docker, where requests arrive from
+// other containers, and doesn't protect deployments behind a reverse proxy.)
+export function isLocalTestLoginEnabled() {
   return process.env.ENABLE_TEST_LOGIN === "true" &&
-    process.env.NODE_ENV !== "production" &&
-    isLoopback;
+    ["development", "test"].includes(process.env.NODE_ENV);
 }
 
 export function createLocalTestToken(userId) {

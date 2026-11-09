@@ -16,6 +16,5 @@ npm run dev
 The database migration scripts, Docker setup, and Express API now live in `backend/`. See the [project README](../README.md) for how to run them. To apply migrations with Docker only, run from the **repository root**:
 
 ```sh
-docker compose -f backend/docker-compose.yml run --build --rm migrate
-docker compose -f backend/docker-compose.yml run --build --rm migrate npm run query
+docker compose run --build --rm migrate
 ```
