@@ -1,7 +1,7 @@
 /*
-Hi! This is the postgreSQL database schema!
-VERY IMPORTANT: Make sure that ALL migration files for the database are listed under 'const migrationFiles' in the 'migrate.js' file.
-Adds what the built-in quiz builder needs on top of create_database.sql:
+Quiz builder schema additions.
+Migration order is defined by the numeric filename prefix.
+Adds what the built-in quiz builder needs on top of 001_create_database.sql:
 - a draft/published flag on module pages, so quizzes can be saved before students see them
 - an order for questions and answer choices, so the builder and students see them in a stable order
 */
