@@ -14,7 +14,7 @@ The backend must enforce permissions; hiding a button in React is not access con
 
 The React app supports Auth0 sign-in and local-only buttons for the three seeded LMS test accounts. The API verifies Auth0 access tokens and saves each Auth0 subject in `users.auth0Sub`; the database's numeric `userID` remains the LMS foreign key. Verified email is used only to link an Auth0 subject to a pre-provisioned LMS account the first time. Local test-account buttons instead use the selected seeded database row and are hard-disabled outside local development. Quiz API requests use signed bearer tokens, never browser-supplied user IDs. Persistent course content, enrollment, overall grades, most admin tools, and messaging are not connected.
 
-[View the shared frontend preview](https://elegant-fox-d4ee0f.netlify.app). This is currently a manual deployment and may lag behind this repository.
+[View the shared frontend preview](https://elegant-fox-d4ee0f.netlify.app). This is currently a manual deployment and may lag behind this repository. The [Netlify full-stack deployment guide](docs/netlify-deployment.md) describes the planned GitHub-connected frontend, API, and database setup.
 
 ## Install prerequisites
 
