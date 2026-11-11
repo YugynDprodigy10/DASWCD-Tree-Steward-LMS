@@ -47,7 +47,7 @@ This is a private repository. Protected branches require an eligible plan: for a
 
 ## Preview hosting
 
-The existing Netlify preview was uploaded manually. CI here does not publish it. For the full-stack Netlify setup, connect the project to this private GitHub repository only with an authorized owner account and the necessary repository access. Keep the base directory at the repository root; `netlify.toml` builds the frontend and packages the API Function together. See [the deployment guide](netlify-deployment.md) for database, Auth0, and rollback steps. Verify a deploy preview before replacing the existing published site. Never expose real student data in previews.
+The existing Netlify preview was uploaded manually. CI here does not publish it. Connect Netlify to this private GitHub repository only with an authorized owner account and the necessary repository access. If configuring continuous deployment, use base directory `frontend`, build command `npm run build`, publish directory `dist` relative to that base, and Node 24. Verify a deploy preview before replacing the existing published site. Never expose real student data in previews.
 
 ## Information needed to finish hosted settings
 

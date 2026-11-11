@@ -1,7 +1,7 @@
 /*
-Initial LMS schema.
-Subsequent changes are numbered migrations in this folder.
-
+Hi! This is the postgreSQL database schema!
+VERY IMPORTANT: Make sure that ALL migration files for the database are listed under 'const migrationPath' in the 'migrate.js' file.
+other sql files created beyond this one REQUIRE this header!
 */
 
 CREATE TABLE IF NOT EXISTS users (

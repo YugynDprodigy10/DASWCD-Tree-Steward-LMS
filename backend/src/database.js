@@ -91,22 +91,6 @@ async function connectWithRetry(host, port) { // Retries while PostgreSQL is sta
 }
 
 async function withDatabase(callback) {
-  // A hosted Postgres URL skips all local container setup, so the same
-  // migration command can run against a deliberately selected remote DB.
-  const connectionString = process.env.NETLIFY_DB_URL || process.env.DATABASE_URL;
-  if (connectionString) {
-    const client = new Client({
-      connectionString,
-      connectionTimeoutMillis: 5_000,
-    });
-    await client.connect();
-    try {
-      return await callback(client);
-    } finally {
-      await client.end();
-    }
-  }
-
   let host = process.env.DB_HOST;
   let hostPort = Number(process.env.DB_PORT ?? 5434);
 
