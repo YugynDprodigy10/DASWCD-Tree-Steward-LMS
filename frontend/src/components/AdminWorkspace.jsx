@@ -208,8 +208,10 @@ export default function AdminWorkspace({ brand, user, onExit }) {
       description: "",
     })),
   );
+  const [moduleTeachers, setModuleTeachers] = useState([]);
   const [showRemoved, setShowRemoved] = useState(false);
-  const [people, setPeople] = useState(initialPeople);
+  const [people, setPeople] = useState(() => user ? [] : initialPeople);
+  const [loadedPeopleUser, setLoadedPeopleUser] = useState(null);
   const [invitations, setInvitations] = useState(user ? [] : initialInvitations);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All roles");
@@ -230,9 +232,35 @@ export default function AdminWorkspace({ brand, user, onExit }) {
   useEffect(() => {
     if (!user?.getAccessTokenSilently) return undefined;
     let active = true;
-    adminRequest(user, "/admin/invitations")
-      .then(({ invitations: liveInvitations }) => {
-        if (active) setInvitations(liveInvitations);
+    Promise.all([
+      adminRequest(user, "/admin/people"),
+      adminRequest(user, "/admin/invitations"),
+    ])
+      .then(([{ people: livePeople }, { invitations: liveInvitations }]) => {
+        if (active) {
+          setPeople(livePeople);
+          setInvitations(liveInvitations);
+          setLoadedPeopleUser(user.id);
+        }
+      })
+      .catch((error) => {
+        if (active) {
+          setPeople([]);
+          setLoadedPeopleUser(user.id);
+          record(error.message, true);
+        }
+      });
+    return () => { active = false; };
+  }, [user]);
+  useEffect(() => {
+    if (!user?.getAccessTokenSilently) return undefined;
+    let active = true;
+    adminRequest(user, "/admin/modules")
+      .then(({ modules: liveModules, teachers: liveTeachers }) => {
+        if (active) {
+          setModules(liveModules);
+          setModuleTeachers(liveTeachers);
+        }
       })
       .catch((error) => {
         if (active) record(error.message, true);
@@ -250,7 +278,8 @@ export default function AdminWorkspace({ brand, user, onExit }) {
         invite.status === "Pending" &&
         normalizeEmail(invite.email) === normalizeEmail(email),
     );
-  const visiblePeople = people.filter(
+  const directoryLoading = Boolean(user && loadedPeopleUser !== user.id);
+  const visiblePeople = (directoryLoading ? [] : people).filter(
     (person) =>
       (showRemoved
         ? person.status === "Removed"
@@ -324,7 +353,6 @@ export default function AdminWorkspace({ brand, user, onExit }) {
   const titles = {
     Overview: "Class overview",
     People: "People & access",
-    Invitations: "Invitations",
     Modules: "Module management",
     Progress: "Student progress",
   };
@@ -343,7 +371,6 @@ export default function AdminWorkspace({ brand, user, onExit }) {
           {[
             ["Overview", "⌂"],
             ["People", "♧"],
-            ["Invitations", "✉"],
             ["Modules", "▤"],
             ["Progress", "◷"],
           ].map(([name, icon]) => (
@@ -392,12 +419,6 @@ export default function AdminWorkspace({ brand, user, onExit }) {
             </div>
             <div className="admin-actions">
               <button
-                className="secondary"
-                onClick={() => setDialog({ mode: "add" })}
-              >
-                + Add person
-              </button>
-              <button
                 className="primary"
                 onClick={() => setDialog({ mode: "invite" })}
               >
@@ -407,7 +428,7 @@ export default function AdminWorkspace({ brand, user, onExit }) {
           </div>
           <p className="admin-demo-note">
             {user
-              ? "Account invitations create real LMS and Auth0 users and send password setup emails. Other people, module, and progress tools are still sample data."
+              ? "People and pending invitations are loaded from the LMS database. Invite someone to add a real account."
               : "This is a sample admin workspace. Invitations shown here are previews and do not create real accounts or send email."}
           </p>
           {notice && (
@@ -436,7 +457,7 @@ export default function AdminWorkspace({ brand, user, onExit }) {
                     "Pending invitations",
                     invitations.filter((invite) => invite.status === "Pending")
                       .length,
-                    "Invitations",
+                    "People",
                   ],
                   ["Course modules", modules.length, "Modules"],
                 ].map(([label, count, destination]) => (
@@ -483,7 +504,9 @@ export default function AdminWorkspace({ brand, user, onExit }) {
                   </ul>
                 ) : (
                   <p className="muted">
-                    Your sample account and invitation changes will appear here.
+                    {user
+                      ? "Recent administrator actions will appear here."
+                      : "Your sample account and invitation changes will appear here."}
                   </p>
                 )}
               </section>
@@ -516,17 +539,24 @@ export default function AdminWorkspace({ brand, user, onExit }) {
                   </select>
                 </div>
               </div>
-              <label className="checkbox-label">
+              {!user && <label className="checkbox-label">
                 <input
                   type="checkbox"
                   checked={showRemoved}
                   onChange={(event) => setShowRemoved(event.target.checked)}
                 />
                 Show removed people
-              </label>
+              </label>}
               <p className="helper" role="status">
-                {visiblePeople.length} people shown · Sample records
+                {directoryLoading
+                  ? "Loading people from the database…"
+                  : `${visiblePeople.length} ${user ? "database" : "sample"} ${visiblePeople.length === 1 ? "person" : "people"} shown`}
               </p>
+              {directoryLoading && (
+                <p className="notice" role="status">
+                  Loading people and invitations…
+                </p>
+              )}
               <section className="people-grid" aria-label="People">
                 {visiblePeople.map((person) => (
                   <article className="person-card" key={person.id}>
@@ -552,15 +582,15 @@ export default function AdminWorkspace({ brand, user, onExit }) {
                       <span className="type-tag assignment">{person.role}</span>
                     </p>
                     <p className="helper">
-                      {person.role === "Instructor"
+                      {person.role === "Instructor" || person.role === "Student"
                         ? person.modules.length
                           ? `Assigned weeks: ${[...person.modules].sort((a, b) => a - b).join(", ")}`
                           : "No modules assigned"
                         : person.role === "Administrator"
                           ? "Manages people and course settings"
-                          : `${person.completed} of ${modules.length} modules complete · Illustrative progress`}
+                          : ""}
                     </p>
-                    <div className="person-actions">
+                    {!user && <div className="person-actions">
                       {person.status !== "Removed" ? (
                         <>
                           <button
@@ -622,7 +652,7 @@ export default function AdminWorkspace({ brand, user, onExit }) {
                           Restore person
                         </button>
                       )}
-                    </div>
+                    </div>}
                   </article>
                 ))}
               </section>
@@ -641,107 +671,95 @@ export default function AdminWorkspace({ brand, user, onExit }) {
                   </button>
                 </div>
               )}
-            </>
-          )}
-          {page === "Invitations" && (
-            <>
-              <p className="muted">
-                {user
-                  ? "Registration is invitation-only. Auth0 emails a password setup link to each invited user."
-                  : "Registration is invitation-only. Preview acceptance to explore account setup."}
-              </p>
-              <section className="invite-list" aria-label="Invitations">
-                {invitations.map((invite) => (
-                  <article className="admin-panel invite-row" key={invite.id}>
-                    <div>
-                      <span
-                        className={`status-tag ${invite.status.toLowerCase()}`}
-                      >
-                        {invite.status}
-                      </span>
-                      <h2>{invite.name}</h2>
-                      <p>{invite.email}</p>
-                      <span className="helper">
-                        {invite.role}
-                        {invite.role === "Instructor"
-                          ? ` · ${invite.modules.length} assigned modules`
-                          : ""}
-                      </span>
-                    </div>
-                    <div className="invite-actions">
-                      {invite.status === "Pending" && invite.auth0Managed && (
-                        <button
-                          className="secondary"
-                          onClick={async () => {
-                            try {
-                              await adminRequest(
-                                user,
-                                `/admin/invitations/${invite.id}/resend`,
-                                "POST",
-                              );
-                              record(`Account setup email resent to ${invite.email}.`);
-                            } catch (error) {
-                              record(error.message, true);
-                            }
-                          }}
-                        >
-                          Resend setup email
-                        </button>
-                      )}
-                      {invite.status === "Pending" && !invite.auth0Managed && (
-                        <>
-                          <button
-                            className="secondary"
-                            onClick={() =>
-                              setDialog({ mode: "accept", invite })
-                            }
-                          >
-                            Preview acceptance
-                          </button>
-                          <button
-                            className="secondary"
-                            onClick={() =>
-                              setDialog({ mode: "deliver", invite })
-                            }
-                          >
-                            Send invite link
-                          </button>
-                          <button
-                            className="text-button"
-                            onClick={() =>
-                              setDialog({ mode: "revoke", invite })
-                            }
-                          >
-                            Revoke
-                          </button>
-                        </>
-                      )}
-                      {["Expired", "Revoked"].includes(invite.status) && (
-                        <button
-                          className="secondary"
-                          onClick={() => changeInvitation(invite, "Pending")}
-                        >
-                          Renew invitation
-                        </button>
-                      )}
-                      {invite.status === "Accepted" && (
-                        <span className="helper">
-                          Account listed under People
-                        </span>
-                      )}
-                    </div>
-                  </article>
-                ))}
+              <section className="admin-panel" aria-label="Pending invitations">
+                <h2>Pending invitations</h2>
+                <p className="muted">
+                  {user
+                    ? "Invited accounts are stored in the database and appear above after completing account setup."
+                    : "Sample invitations are previews and do not create real accounts."}
+                </p>
+                {invitations.filter((invite) => invite.status === "Pending").length ? (
+                  <section className="invite-list">
+                    {invitations
+                      .filter((invite) => invite.status === "Pending")
+                      .map((invite) => (
+                        <article className="invite-row" key={invite.id}>
+                          <div>
+                            <span className="status-tag pending">Pending</span>
+                            <h3>{invite.name}</h3>
+                            <p>{invite.email}</p>
+                            <span className="helper">
+                              {invite.role}
+                              {invite.role === "Instructor"
+                                ? ` · ${invite.modules.length} assigned modules`
+                                : ""}
+                            </span>
+                          </div>
+                          {invite.auth0Managed ? (
+                            <button
+                              className="secondary"
+                              onClick={async () => {
+                                try {
+                                  await adminRequest(
+                                    user,
+                                    `/admin/invitations/${invite.id}/resend`,
+                                    "POST",
+                                  );
+                                  record(`Account setup email resent to ${invite.email}.`);
+                                } catch (error) {
+                                  record(error.message, true);
+                                }
+                              }}
+                            >
+                              Resend setup email
+                            </button>
+                          ) : (
+                            <div className="invite-actions">
+                              <button
+                                className="secondary"
+                                onClick={() => setDialog({ mode: "accept", invite })}
+                              >
+                                Preview acceptance
+                              </button>
+                              <button
+                                className="secondary"
+                                onClick={() => setDialog({ mode: "deliver", invite })}
+                              >
+                                Send invite link
+                              </button>
+                              <button
+                                className="text-button"
+                                onClick={() => changeInvitation(invite, "Revoked")}
+                              >
+                                Revoke
+                              </button>
+                            </div>
+                          )}
+                        </article>
+                      ))}
+                  </section>
+                ) : (
+                  <p className="helper">No pending invitations.</p>
+                )}
               </section>
             </>
           )}
           {page === "Modules" && (
             <AdminModules
               modules={modules}
-              people={people}
+              instructors={user
+                ? moduleTeachers
+                : people.filter(
+                    (person) =>
+                      person.role === "Instructor" &&
+                      person.status === "Active",
+                  )}
+              user={user}
               onChange={setModules}
               onNotice={record}
-              onAssign={(module) => setDialog({ mode: "assign", module })}
+              onAssign={(module, teacherIds) =>
+                setDialog({ mode: "assign", module, teacherIds })
+              }
             />
           )}
           {page === "Progress" && (
@@ -825,7 +843,7 @@ export default function AdminWorkspace({ brand, user, onExit }) {
                 ]);
                 record(`Sample invitation created for ${values.name}. No email was sent.`);
               }
-              setPage("Invitations");
+                setPage("People");
             } else {
               setPeople((previous) =>
                 previous.map((person) =>
@@ -1004,26 +1022,46 @@ export default function AdminWorkspace({ brand, user, onExit }) {
       {dialog?.mode === "assign" && (
         <AssignmentDialog
           module={dialog.module}
-          people={people}
+          instructors={user
+            ? moduleTeachers
+            : people.filter(
+                (person) =>
+                  person.role === "Instructor" &&
+                  person.status === "Active",
+              )}
+          assignedTeacherIds={dialog.teacherIds}
           onClose={() => setDialog(null)}
-          onSave={(selected) => {
-            setPeople((previous) =>
-              previous.map((person) =>
-                person.role === "Instructor" && person.status === "Active"
-                  ? {
-                      ...person,
-                      modules: selected.includes(person.id)
-                        ? [...new Set([...person.modules, dialog.module.id])]
-                        : person.modules.filter(
-                            (id) => id !== dialog.module.id,
-                          ),
-                    }
-                  : person,
-              ),
-            );
-            record(
-              `Instructor assignments updated for Week ${dialog.module.id} in this demo.`,
-            );
+          onSave={async (selected) => {
+            if (user?.getAccessTokenSilently) {
+              const { module } = await adminRequest(
+                user,
+                `/admin/modules/${dialog.module.id}/teachers`,
+                "PATCH",
+                { teacherIds: selected },
+              );
+              setModules((previous) =>
+                previous.map((item) => item.id === module.id ? module : item),
+              );
+              record(`Instructor assignments saved for Week ${module.id}.`);
+            } else {
+              setPeople((previous) =>
+                previous.map((person) =>
+                  person.role === "Instructor" && person.status === "Active"
+                    ? {
+                        ...person,
+                        modules: selected.includes(person.id)
+                          ? [...new Set([...person.modules, dialog.module.id])]
+                          : person.modules.filter(
+                              (id) => id !== dialog.module.id,
+                            ),
+                      }
+                    : person,
+                ),
+              );
+              record(
+                `Instructor assignments updated for Week ${dialog.module.id} in this demo.`,
+              );
+            }
             setDialog(null);
           }}
         />
@@ -1032,56 +1070,71 @@ export default function AdminWorkspace({ brand, user, onExit }) {
   );
 }
 
-function AssignmentDialog({ module, people, onSave, onClose }) {
-  const instructors = people.filter(
-    (person) => person.role === "Instructor" && person.status === "Active",
-  );
+function AssignmentDialog({
+  module,
+  instructors,
+  assignedTeacherIds,
+  onSave,
+  onClose,
+}) {
   const [selected, setSelected] = useState(
-    instructors
-      .filter((person) => person.modules.includes(module.id))
-      .map((person) => person.id),
+    assignedTeacherIds ??
+      instructors
+        .filter((person) => person.modules.includes(module.id))
+        .map((person) => person.id),
   );
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
   return (
     <Modal title={`Week ${module.id}: Assign instructors`} onClose={onClose}>
       <p>{module.title}</p>
       <form
-        onSubmit={(event) => {
+        onSubmit={async (event) => {
           event.preventDefault();
-          onSave(selected);
+          setSaving(true);
+          setError("");
+          try {
+            await onSave(selected);
+          } catch (failure) {
+            setError(failure.message || "Unable to save instructor assignments.");
+          } finally {
+            setSaving(false);
+          }
         }}
       >
-        <fieldset className="module-choices">
-          <legend>Active instructors</legend>
+        <fieldset className="module-choices" disabled={saving}>
+          <legend>Teacher accounts</legend>
           {instructors.length ? (
-            instructors.map((person) => (
-              <label className="checkbox-label" key={person.id}>
+            instructors.map((instructor) => (
+              <label className="checkbox-label" key={instructor.id}>
                 <input
                   type="checkbox"
-                  checked={selected.includes(person.id)}
+                  checked={selected.includes(instructor.id)}
                   onChange={(event) =>
                     setSelected(
                       event.target.checked
-                        ? [...selected, person.id]
-                        : selected.filter((id) => id !== person.id),
+                        ? [...selected, instructor.id]
+                        : selected.filter((id) => id !== instructor.id),
                     )
                   }
                 />
-                {person.name}
+                {instructor.name}
               </label>
             ))
           ) : (
             <p>
-              Invite an instructor or update an existing person’s role first.
+              Invite or create an instructor account before assigning this module.
             </p>
           )}
         </fieldset>
+        {error && <p className="error-message" role="alert">{error}</p>}
         <p className="helper">Uncheck all to leave this module unassigned.</p>
         <div className="dialog-actions">
-          <button className="secondary" type="button" onClick={onClose}>
+          <button className="secondary" type="button" onClick={onClose} disabled={saving}>
             Cancel
           </button>
-          <button className="primary" type="submit">
-            Save assignments
+          <button className="primary" type="submit" disabled={saving}>
+            {saving ? "Saving…" : "Save assignments"}
           </button>
         </div>
       </form>

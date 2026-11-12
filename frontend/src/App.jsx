@@ -16,6 +16,7 @@ import { plainTextHtml } from "./materials/content.js";
 import { useRoute } from "./navigation/useRoute.js";
 import { navigateRoute } from "./navigation/route.js";
 import Gradebook from "./gradebook/Gradebook.jsx";
+import { useAnnouncements } from "./announcements/useAnnouncements.js";
 
 function restoredDemoRole() {
   try {
@@ -241,6 +242,7 @@ function CourseApp({ auth0, testLoginEnabled }) {
   const getAccessTokenSilently = auth0?.getAccessTokenSilently;
   const isResolvingAccount = Boolean(isAuthenticated && !user && !authMessage);
   const materials = useMaterials(user, moduleId, Boolean(role));
+  const announcements = useAnnouncements(user, moduleId, Boolean(role));
   const isInstructor = role === "instructor" && !preview;
   const canEdit = isInstructor && moduleId === 2;
   const canEditQuiz = isInstructor && (user ? true : moduleId === 2);
@@ -253,7 +255,12 @@ function CourseApp({ auth0, testLoginEnabled }) {
   const currentModule = modules.find((item) => item.id === moduleId);
   const materialIds = new Set(materials.items.map((item) => item.id));
   const shownBlocks = [
-    ...blocks.filter((item) => !materialIds.has(item.id)),
+    ...blocks.filter(
+      (item) =>
+        !materialIds.has(item.id) &&
+        !(user && item.type === "Announcement"),
+    ),
+    ...announcements.items,
     ...materials.items,
   ].filter(
     (item) =>
@@ -388,6 +395,16 @@ function CourseApp({ auth0, testLoginEnabled }) {
     if (values.type === "Learning material") {
       await materials.save(values, file, onProgress);
       navigateRoute({ page: "Home", quizId: null, builderId: null });
+      setEditor(null);
+      setMessage(
+        values.published
+          ? `Published “${values.title}” to students.`
+          : `Saved “${values.title}” as a draft. Students can't see it yet.`,
+      );
+      return;
+    }
+    if (values.type === "Announcement" && user) {
+      await announcements.save(values);
       setEditor(null);
       setMessage(
         values.published
@@ -640,6 +657,11 @@ const navItems = isInstructor
               {materials.error && (
                 <p role="alert" className="notice">
                   {materials.error}
+                </p>
+              )}
+              {announcements.error && (
+                <p role="alert" className="notice">
+                  {announcements.error}
                 </p>
               )}
               <section className="content-stack" aria-label="Module content">
