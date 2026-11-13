@@ -1,21 +1,38 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-const client = new S3Client({});
+// due to netlify reserving AWS_* variables for its functions, this module uses S3_* names and passes
+// creditials to the sdk explicitly 
+let client;
 
-// returns bucket name or throws error if S3_BUCKET is missing
-function bucket() {
-    const s3_bucket = process.env.S3_BUCKET?.trim();
-    if (!s3_bucket) {
-        throw new Error("S3_BUCKET not set. Add to backend/.env");
+// creates s3 client on first use. missing s3 setting only breaks file
+// features instead of crashing the entire api at start
+function getClient(){
+  if (!client){
+    client = new S3Client({
+      region: requiredEnv("S3_REGION"),
+      credentials: {
+        accessKeyId: requiredEnv("S3_ACCESS_KEY_ID"),
+        secretAccessKey: requiredEnv("S3_SECRET_ACCESS_KEY"),
+      },
+    });
+  }
+  return client;
+}
+
+// reads required setting from env or throws a clear setup error naming it
+function requiredEnv(name) {
+    const value = process.env[name]?.trim();
+    if (!value) {
+        throw new Error(`${name} not set. Add to backend/.env`);
     }
-    return s3_bucket;
+    return value;
 }
 
 export const storage = {
   async putFile(key, body, contentType) {
-    await client.send(new PutObjectCommand({
-      Bucket: bucket(),
+    await getClient().send(new PutObjectCommand({
+      Bucket: requiredEnv("S3_BUCKET"),
       Key: key,
       Body: body,
       ContentType: contentType,
@@ -24,8 +41,8 @@ export const storage = {
 
   async deleteFile(key) {
     // deletes object at key
-    await client.send(new DeleteObjectCommand({
-        Bucket: bucket(),
+    await getClient().send(new DeleteObjectCommand({
+        Bucket: requiredEnv("S3_BUCKET"),
         Key: key,
     }));
   },
@@ -34,10 +51,10 @@ export const storage = {
     // returns a temp link (15 mins) that lets browser open private file
     // signing is local with no aws call. links regenerated each time materials are listed
     const command = new GetObjectCommand({
-        Bucket: bucket(),
+        Bucket: requiredEnv("S3_BUCKET"),
         Key: key,
         ResponseContentDisposition: `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`,
     });
-    return getSignedUrl(client, command, {expiresIn: 900});
+    return getSignedUrl(getClient(), command, {expiresIn: 900});
   },
 };
