@@ -14,7 +14,7 @@ The backend must enforce permissions; hiding a button in React is not access con
 
 The React app supports Auth0 sign-in and local-only buttons for the three seeded LMS test accounts. The API verifies Auth0 access tokens and saves each Auth0 subject in `users.auth0Sub`; the database's numeric `userID` remains the LMS foreign key. Verified email is used only to link an Auth0 subject to a pre-provisioned LMS account the first time. Local test-account buttons instead use the selected seeded database row and are hard-disabled outside local development. Quiz API requests use signed bearer tokens, never browser-supplied user IDs. Persistent course content, enrollment, overall grades, most admin tools, and messaging are not connected.
 
-[View the shared frontend preview](https://elegant-fox-d4ee0f.netlify.app). This is currently a manual deployment and may lag behind this repository.
+[View the shared frontend preview](https://elegant-fox-d4ee0f.netlify.app). This is currently a manual deployment and may lag behind this repository. The [Netlify full-stack deployment guide](docs/netlify-deployment.md) describes the planned GitHub-connected frontend, API, and database setup.
 
 ## Install prerequisites
 
@@ -206,6 +206,8 @@ Google Forms links have been replaced with a native multiple-choice builder. As 
 Student quiz titles open a separate tab/window (browser preferences decide which). Radio-button groups support keyboard navigation, unanswered questions block submission, and successful submissions show the score. Instructor previews never submit attempts. Quiz windows expire after two hours; signing out invalidates their launch context.
 
 Demo quizzes use browser-local storage and local practice scoring; they are cleared on sign-out. They are not official grades. Signed-in accounts use the quiz API without falling back to sample data. Run the backend and migrations before using signed-in quiz flows. The API validates Auth0 access tokens and derives each request's identity and roles from the database; it does not trust a user ID supplied by the browser. The API decides module permissions; live accounts are not hardcoded to Week 2 for quiz operations.
+
+Signed-in students can view quiz grades from **My progress**; instructors can view active student rosters and scores from **Gradebook** for modules assigned to them. Published quizzes have equal weight within their module, regardless of each quiz's points. The module grade is the average of each quiz's percentage, uses the latest submitted attempt per quiz, and appears only after every currently published quiz has a submitted attempt. Draft and unpublished quizzes do not count. The gradebook reads the existing quiz and enrollment tables, so no additional database migration is needed.
 
 Final exams with written answers remain disabled until the backend supports them. Weighted course grades and retake/answer-release policy are separate work. Native quiz questions are no longer edited through the announcement/material dialog.
 

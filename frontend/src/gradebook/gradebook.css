@@ -1,0 +1,119 @@
+.gradebook {
+  margin: 24px 0;
+}
+
+.gradebook-note,
+.gradebook-empty {
+  padding: 16px 18px;
+  border: 1px solid #d7ddce;
+  border-radius: 9px;
+  background: #fff;
+  color: #53614f;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.gradebook-module {
+  margin: 24px 0;
+  padding: 22px;
+  border: 1px solid #d7ddce;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.gradebook-module h2 {
+  margin: 0 0 4px;
+}
+
+.gradebook-module > .muted {
+  margin: 4px 0 16px;
+  font-size: 13px;
+}
+
+.gradebook-module-grade {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 18px;
+}
+
+.gradebook-module-grade strong {
+  color: #355c43;
+}
+
+.gradebook-module-grade span,
+.gradebook th small,
+.gradebook td small {
+  display: block;
+  margin-top: 5px;
+  color: #697568;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.gradebook-scroll {
+  overflow-x: auto;
+}
+
+.gradebook table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13px;
+}
+
+.gradebook th,
+.gradebook td {
+  min-width: 130px;
+  padding: 12px;
+  border-bottom: 1px solid #e6e9e1;
+  vertical-align: top;
+}
+
+.gradebook thead th {
+  color: #53614f;
+  font-weight: 650;
+}
+
+.gradebook tbody th {
+  min-width: 190px;
+}
+
+.gradebook-quiz-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.gradebook-quiz-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-top: 1px solid #e6e9e1;
+  font-size: 13px;
+}
+
+.gradebook-empty {
+  margin: 24px 0;
+}
+
+.gradebook-empty h2 {
+  margin: 0 0 8px;
+}
+
+.gradebook-empty p {
+  margin: 0;
+}
+
+@media (max-width: 560px) {
+  .gradebook-module {
+    padding: 16px;
+  }
+
+  .gradebook-quiz-list li {
+    flex-direction: column;
+    gap: 4px;
+  }
+}

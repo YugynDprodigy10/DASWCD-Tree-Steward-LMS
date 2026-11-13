@@ -4,23 +4,25 @@
 
 
 import "dotenv/config";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { withDatabase } from "./database.js";
 
-//VERY IMPORTANT: Make sure that ALL migration files for the database are listed under 'const migrationFiles', in the order they must run.
-const migrationFiles = [
-  "create_database.sql",
-  "002_quiz_builder.sql",
-  "003_auth0_identity.sql",
-  "004_remove_password_temp.sql",
-  "005_admin_auth0_invitations.sql",
-  "006_module_materials.sql",
-];
+// Netlify applies this same directory during deploys. Numbered filenames keep
+// the migration order explicit and prevent the app from maintaining a copy.
+const migrationsDirectory = new URL("../../netlify/database/migrations/", import.meta.url);
 
 async function runMigration() { // Applies the database migration files in order.
+  const migrationFiles = (await readdir(migrationsDirectory))
+    .filter((file) => /^\d+_[a-z0-9_-]+\.sql$/i.test(file))
+    .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+
+  if (migrationFiles.length === 0) {
+    throw new Error("No numbered SQL migrations were found.");
+  }
+
   await withDatabase(async (client) => {
     for (const file of migrationFiles) {
-      const migrationPath = new URL(`../databaseInstructions/migrations/${file}`, import.meta.url);
+      const migrationPath = new URL(`../../netlify/database/migrations/${file}`, import.meta.url);
       const migrationSql = await readFile(migrationPath, "utf8");
       await client.query(migrationSql);
       console.log(`${file} applied successfully.`);

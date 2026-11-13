@@ -19,7 +19,7 @@ export default function Modal({ title, children, onClose }) {
       onCancel={event => { event.preventDefault(); onClose(); }}
       onKeyDown={(event) => {
         if (event.key !== "Tab") return;
-        const controls = [...dialog.current.querySelectorAll('button, a[href], input, select, textarea, video[controls], [tabindex]')]
+        const controls = [...dialog.current.querySelectorAll('button, a[href], input, select, textarea, video[controls], [contenteditable="true"], [tabindex]')]
           .filter(element => !element.disabled && element.tabIndex >= 0 && element.getClientRects().length > 0);
         const first = controls[0];
         const last = controls[controls.length - 1];

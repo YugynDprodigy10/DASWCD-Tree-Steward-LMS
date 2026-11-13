@@ -174,9 +174,10 @@ function PersonForm({ person, mode, onSave, onClose, emailTaken, modules, liveIn
               : "Access changes apply only to this sample directory. Real permissions must be enforced by the backend."}
         </p>
         {error && (
-          <p className="notice" role="alert">
+          <div className="error-message" role="alert" aria-live="assertive">
+            <strong>{liveInvite ? "Invitation failed:" : "Unable to save:"}</strong>{" "}
             {error}
-          </p>
+          </div>
         )}
         <div className="dialog-actions">
           <button type="button" className="secondary" onClick={onClose}>

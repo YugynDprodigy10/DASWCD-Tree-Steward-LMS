@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Modal from "./components/Modal";
 import BlockEditor from "./components/BlockEditor";
+import LessonEditor from "./components/LessonEditor";
 import QuizWorkspace from "./quiz/QuizWorkspace";
 import QuizCard from "./quiz/QuizCard.jsx";
 import { useModuleQuizzes } from "./quiz/useModuleQuizzes";
@@ -10,8 +11,11 @@ import "./App.css";
 import ApiStatus from "./components/ApiStatus";
 import AdminWorkspace from "./components/AdminWorkspace";
 import { useMaterials } from "./materials/useMaterials.js";
+import LessonContent from "./components/LessonContent.jsx";
+import { plainTextHtml } from "./materials/content.js";
 import { useRoute } from "./navigation/useRoute.js";
 import { navigateRoute } from "./navigation/route.js";
+import Gradebook from "./gradebook/Gradebook.jsx";
 
 function restoredDemoRole() {
   try {
@@ -383,11 +387,12 @@ function CourseApp({ auth0, testLoginEnabled }) {
     if (!canEdit) throw new Error("You cannot edit this module.");
     if (values.type === "Learning material") {
       await materials.save(values, file, onProgress);
+      navigateRoute({ page: "Home", quizId: null, builderId: null });
       setEditor(null);
       setMessage(
-        user
-          ? "Learning material saved."
-          : "Learning material saved in this browser.",
+        values.published
+          ? `Published “${values.title}” to students.`
+          : `Saved “${values.title}” as a draft. Students can't see it yet.`,
       );
       return;
     }
@@ -523,6 +528,16 @@ const navItems = isInstructor
           </div>
         )}
         <main id="main" tabIndex={-1}>
+          {editor?.block?.type === "Learning material" ? (
+            <LessonEditor
+              key={editor.block.id || "new-lesson"}
+              block={editor.block}
+              user={user}
+              onClose={() => setEditor(null)}
+              onSave={saveBlock}
+            />
+          ) : (
+          <>
           <div className="module-toolbar">
             <div>
               <label htmlFor="module-select">YOUR COURSE MODULES</label>
@@ -796,18 +811,16 @@ const navItems = isInstructor
               })}
             </section>
           )}
-          {(page === "Students" || page === "Gradebook") && (
+          {page === "Gradebook" && (
+            <Gradebook user={user} role="teacher" />
+          )}
+          {page === "Students" && (
             <section className="empty-state">
-              <span aria-hidden="true">{page === "Students" ? "♧" : "▤"}</span>
-              <h2>
-                {page === "Students"
-                  ? "Your roster will live here."
-                  : "Results will appear here."}
-              </h2>
+              <span aria-hidden="true">♧</span>
+              <h2>Your roster will live here.</h2>
               <p>
-                {page === "Students"
-                  ? "Student enrollment is not connected in this prototype. No real student records are displayed."
-                  : "Quiz attempts and grades are not connected yet. No scores have been generated."}
+                Student enrollment is not connected in this prototype. No real
+                student records are displayed.
               </p>
               <button className="secondary" onClick={() => navigate("Home")}>
                 Back to module
@@ -815,34 +828,37 @@ const navItems = isInstructor
             </section>
           )}
           {page === "My progress" && (
-            <section className="progress-panel">
-              <h2>
-                {read.length} announcement{read.length === 1 ? "" : "s"} read
-              </h2>
-              <p>
-                Reading activity is tracked only in this demo session. It does
-                not count as completing a module or earning a grade.
-              </p>
-              {read.length === 0 ? (
-                <p className="muted">
-                  Open a module announcement and select “Mark as read” to try
-                  it.
+            <>
+              <Gradebook user={user} role="student" />
+              <section className="progress-panel">
+                <h2>
+                  {read.length} announcement{read.length === 1 ? "" : "s"} read
+                </h2>
+                <p>
+                  Reading activity is tracked only in this demo session. It
+                  does not count as completing a module or earning a grade.
                 </p>
-              ) : (
-                <ul>
-                  {blocks
-                    .filter(
-                      (block) => read.includes(block.id) && block.published,
-                    )
-                    .map((block) => (
-                      <li key={block.id}>
-                        {block.title}
-                        <span>Week {block.moduleId}</span>
-                      </li>
-                    ))}
-                </ul>
-              )}
-            </section>
+                {read.length === 0 ? (
+                  <p className="muted">
+                    Open a module announcement and select “Mark as read” to try
+                    it.
+                  </p>
+                ) : (
+                  <ul>
+                    {blocks
+                      .filter(
+                        (block) => read.includes(block.id) && block.published,
+                      )
+                      .map((block) => (
+                        <li key={block.id}>
+                          {block.title}
+                          <span>Week {block.moduleId}</span>
+                        </li>
+                      ))}
+                  </ul>
+                )}
+              </section>
+            </>
           )}
           <footer className="workspace-footer">
             <span>Steward Tree · Rooted in community.</span>
@@ -851,13 +867,14 @@ const navItems = isInstructor
               browser
             </span>
           </footer>
+          </>
+          )}
         </main>
       </div>
-      {editor && (
+      {editor && editor.block?.type !== "Learning material" && (
         <BlockEditor
-          key={editor.block?.id || editor.block?.type || "new"}
+          key={editor.block?.id || "new"}
           block={editor.block}
-          user={user}
           onClose={() => setEditor(null)}
           onSave={saveBlock}
         />
@@ -869,47 +886,18 @@ const navItems = isInstructor
           >
             {detail.type}
           </span>
-          <p className="detail-copy">{detail.description}</p>
-          {detail.type === "Learning material" && (
+          {detail.type === "Learning material" ? (
             <div className="learning-resource">
-              {detail.resource ? (
-                <>
-                  {detail.resource.kind === "video" && (
-                    <>
-                      <video
-                        controls
-                        preload="metadata"
-                        aria-label={detail.title}
-                        src={detail.resource.url}
-                      />
-                      <h3>Transcript</h3>
-                      <p className="detail-copy">{detail.transcript}</p>
-                    </>
-                  )}
-                  <a
-                    className="primary resource-link"
-                    href={detail.resource.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Open {detail.resource.kind === "pdf" ? "PDF" : "video"} (new
-                    tab)
-                  </a>
-                  <a
-                    className="resource-link"
-                    href={detail.resource.url}
-                    download={detail.resource.name}
-                  >
-                    Download {detail.resource.name}
-                  </a>
-                </>
-              ) : (
-                <p className="notice">
-                  Your instructor has not added a file yet.
-                </p>
-              )}
+              <LessonContent
+                content={detail.content?.length ? detail.content : [
+                  ...(detail.description ? [{ id: "legacy-description", type: "text", html: plainTextHtml(detail.description) }] : []),
+                  ...(detail.resource ? [{ id: "legacy-resource", type: detail.resource.kind === "video" ? "video" : "pdf", resource: detail.resource, transcript: detail.transcript }] : []),
+                ]}
+                fallbackResource={detail.resource}
+                fallbackTranscript={detail.transcript}
+              />
             </div>
-          )}
+          ) : <p className="detail-copy">{detail.description}</p>}
           {detail.type === "Announcement" && !isInstructor && (
             <button
               className="primary"

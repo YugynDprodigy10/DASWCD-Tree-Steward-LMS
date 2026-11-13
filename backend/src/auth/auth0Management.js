@@ -55,13 +55,30 @@ function auth0Endpoints() {
   };
 }
 
-async function responseJson(response) {
+async function responseJson(response, context) {
   const body = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Auth0ServiceError(
-      `Auth0 request failed with status ${response.status}.`,
-      response.status,
-    );
+    let message = `Auth0 ${context} failed (HTTP ${response.status}).`;
+    if (response.status === 409) {
+      message = "An Auth0 or database account already uses this email address.";
+    } else if (response.status === 429) {
+      message = "Auth0 is temporarily rate-limiting requests. Wait a minute and retry.";
+    } else if ([401, 403].includes(response.status)) {
+      if (context === "Management API token") {
+        message = "Auth0 rejected the Management API credentials. Check the M2M client ID, secret, tenant domain, and Management API audience.";
+      } else if (context === "Management API") {
+        message = "Auth0 denied account creation. Verify the M2M application's Management API authorization includes create:users (and delete:users for rollback).";
+      } else {
+        message = "Auth0 denied the setup-email request. Check the SPA client ID, database connection, and enabled Change Password email template/provider.";
+      }
+    } else if ([400, 422].includes(response.status) &&
+        context === "password setup email") {
+      message = "Auth0 could not send the setup email. Check the SPA client ID, database connection, and enabled Change Password email template.";
+    } else if ([400, 422].includes(response.status) &&
+        context === "Management API") {
+      message = "Auth0 rejected the account details. Check the database connection name and invited user's information.";
+    }
+    throw new Auth0ServiceError(message, response.status);
   }
   return body;
 }
@@ -97,7 +114,7 @@ async function getManagementToken() {
   } catch {
     throw new Auth0ServiceError("Could not reach the Auth0 Management API.");
   }
-  const body = await responseJson(response);
+  const body = await responseJson(response, "Management API token");
   if (typeof body?.access_token !== "string" ||
       !Number.isFinite(body.expires_in)) {
     throw new Auth0ServiceError("Auth0 returned an invalid Management API token.");
@@ -125,7 +142,7 @@ async function managementRequest(path, options = {}) {
     throw new Auth0ServiceError("Could not reach the Auth0 Management API.");
   }
   if (response.status === 204) return null;
-  return responseJson(response);
+  return responseJson(response, "Management API");
 }
 
 function passwordSetupConfig() {
@@ -177,5 +194,5 @@ export async function sendPasswordSetupEmail(email) {
   } catch {
     throw new Auth0ServiceError("Could not reach Auth0's password setup service.");
   }
-  await responseJson(response);
+  await responseJson(response, "password setup email");
 }
