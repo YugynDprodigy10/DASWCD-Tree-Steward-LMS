@@ -1,6 +1,7 @@
 import { Router } from "express";
 import pool from "../db/pool.js";
 import requireUser from "../middleware/requireUser.js";
+import { toId, canManageModule, isEnrolled, canViewModule } from "../auth/modulePermissions.js";
 
 // Built-in quizzes. A quiz is a module page with pageType 'quiz'.
 // Instructors assigned to the module (and admins) build and publish quizzes.
@@ -12,35 +13,6 @@ router.use(["/modules/:moduleId/quizzes", "/quizzes"], requireUser);
 
 const MIN_CHOICES = 2;
 const MAX_CHOICES = 6;
-
-function toId(value) {
-  const id = Number(value);
-  return Number.isInteger(id) && id > 0 ? id : null;
-}
-
-async function canManageModule(user, moduleId, db = pool) {
-  if (user.isAdmin) return true;
-  if (!user.isTeacher) return false;
-  const result = await db.query(
-    "SELECT 1 FROM moduleTeachers WHERE moduleID = $1 AND userID = $2",
-    [moduleId, user.id],
-  );
-  return result.rowCount > 0;
-}
-
-async function isEnrolled(user, moduleId, db = pool) {
-  const result = await db.query(
-    "SELECT 1 FROM moduleStudents WHERE moduleID = $1 AND userID = $2 AND status = 'active'",
-    [moduleId, user.id],
-  );
-  return result.rowCount > 0;
-}
-
-// Students enrolled in a module, and every instructor (so they can see how
-// their week fits the course), may view the module's published quizzes.
-async function canViewModule(user, moduleId, db = pool) {
-  return user.isTeacher || isEnrolled(user, moduleId, db);
-}
 
 async function findQuiz(quizId, db = pool) {
   const result = await db.query(

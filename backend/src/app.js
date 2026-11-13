@@ -4,6 +4,7 @@ import authRouter from "./routes/auth.js";
 import adminRouter from "./routes/admin.js";
 import quizRouter from "./routes/quizzes.js";
 import gradebookRouter from "./routes/gradebook.js";
+import lessonsRouter from "./routes/lessons.js";
 
 // Builds the Express app without starting it, so tests can run it on any port.
 const app = express();
@@ -12,6 +13,7 @@ app.use("/api/auth", authRouter); //allows the frontend to be handled by auth.js
 app.use("/api/admin", adminRouter);
 app.use("/api", quizRouter);
 app.use("/api/gradebook", gradebookRouter);
+app.use("/api", lessonsRouter);
 
 app.get("/api/health", async (req, res) => {
   const result = await pool.query("SELECT NOW()");
