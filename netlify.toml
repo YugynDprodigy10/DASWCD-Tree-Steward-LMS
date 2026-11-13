@@ -8,7 +8,8 @@
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["express", "pg", "jose", "serverless-http"]
+  # jose is ESM-only; bundle it so the function does not try to require() it as CommonJS.
+  external_node_modules = ["express", "pg", "serverless-http"]
 
 [[redirects]]
   from = "/api/*"
