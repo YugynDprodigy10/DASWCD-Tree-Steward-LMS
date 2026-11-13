@@ -1,8 +1,12 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
+
+// largest upload allowed (100 mb) to match frontend limit and lessonFiles check
+export const MAX_FILE_BYTES = 100 * 1024 * 1024;
 
 // due to netlify reserving AWS_* variables for its functions, this module uses S3_* names and passes
-// creditials to the sdk explicitly 
+// credentials to the sdk explicitly 
 let client;
 
 // creates s3 client on first use. missing s3 setting only breaks file
@@ -56,5 +60,19 @@ export const storage = {
         ResponseContentDisposition: `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`,
     });
     return getSignedUrl(getClient(), command, {expiresIn: 900});
+  },
+
+  async uploadForm(key, contentType) {
+    // allows one uplaod to this key. s3 enforces size, type and 10 minute limits and the file must be the last field
+    return createPresignedPost(getClient(), {
+      Bucket: requiredEnv("S3_BUCKET"),
+      Key: key,
+      Fields: { "Content-Type": contentType },
+      Conditions: [
+        ["content-length-range", 1, MAX_FILE_BYTES],
+        ["eq", "$Content-Type", contentType],
+      ],
+      Expires: 600,
+    });
   },
 };
