@@ -90,6 +90,20 @@ test("local test sign-in is unavailable in production", async () => {
   }
 });
 
+test("local test sign-in is unavailable when NODE_ENV is not set", async () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  delete process.env.NODE_ENV;
+  try {
+    const result = await api("/auth/test-login", {
+      method: "POST",
+      body: { account: "student" },
+    });
+    assert.equal(result.status, 404);
+  } finally {
+    process.env.NODE_ENV = previousNodeEnv;
+  }
+});
+
 test("admins can create LMS and Auth0 accounts and send a password setup email", async () => {
   const email = `${tag}-invite@example.com`;
   const result = await api("/admin/invitations", {

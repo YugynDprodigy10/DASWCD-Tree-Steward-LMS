@@ -1,11 +1,11 @@
-FROM node:22-alpine
+FROM node:24-alpine
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+RUN npm ci
 
-COPY src ./src
-COPY databaseInstructions ./databaseInstructions
+COPY . .
 
-CMD ["npm", "run", "migrate"]
+EXPOSE 3000
+CMD ["npm", "start"]
