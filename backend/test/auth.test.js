@@ -136,6 +136,14 @@ test("admins can create LMS and Auth0 accounts and send a password setup email",
     )).rowCount,
     1,
   );
+  const people = await api("/admin/people", { as: "admin" });
+  assert.equal(people.status, 200);
+  assert.ok(people.body.people.some((person) => person.id === users.teacher));
+  assert.equal(
+    people.body.people.some((person) => person.id === result.body.invitation.id),
+    false,
+    "accounts still waiting for setup appear only in pending invitations",
+  );
 });
 
 test("only admins may use account invitation endpoints", async () => {
@@ -146,6 +154,7 @@ test("only admins may use account invitation endpoints", async () => {
   });
   assert.equal(denied.status, 403);
   assert.equal((await api("/admin/invitations")).status, 401);
+  assert.equal((await api("/admin/people", { as: "teacher" })).status, 403);
 });
 
 test("admins can list and resend pending setup emails", async () => {
@@ -183,6 +192,11 @@ test("invited accounts can authenticate and clear pending status after verified 
     [email],
   );
   assert.equal(pending.rows[0].auth0invitepending, false);
+  const people = await api("/admin/people", { as: "admin" });
+  assert.ok(
+    people.body.people.some((person) => person.email === email),
+    "an invited account appears in the people list after setup",
+  );
 });
 
 test("account invitations reject duplicates and malformed roles", async () => {

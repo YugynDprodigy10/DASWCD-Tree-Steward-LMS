@@ -1,9 +1,11 @@
 import { useState } from "react";
 import Modal from "./Modal";
+import { adminRequest } from "../admin/service";
 
 export default function AdminModules({
   modules,
-  people,
+  instructors,
+  user,
   onChange,
   onAssign,
   onNotice,
@@ -43,14 +45,27 @@ export default function AdminModules({
     setEditor(null);
   }
   function toggle(module, field) {
-    onChange(
-      modules.map((item) =>
-        item.id === module.id ? { ...item, [field]: !item[field] } : item,
-      ),
-    );
-    onNotice(
-      `${module.title} is now ${module[field] ? "hidden from" : "visible to"} ${field === "studentsVisible" ? "students" : "instructors"} in the module preview.`,
-    );
+    async function saveVisibility() {
+      try {
+        const updated = user?.getAccessTokenSilently
+          ? (await adminRequest(
+              user,
+              `/admin/modules/${module.id}/visibility`,
+              "PATCH",
+              { [field]: !module[field] },
+            )).module
+          : { ...module, [field]: !module[field] };
+        onChange(
+          modules.map((item) => item.id === module.id ? { ...item, ...updated } : item),
+        );
+        onNotice(
+          `${module.title} is now ${updated[field] ? "visible to" : "hidden from"} ${field === "studentsVisible" ? "all students" : "instructors"}${user?.getAccessTokenSilently ? "." : " in the module preview."}`,
+        );
+      } catch (error) {
+        onNotice(error.message, true);
+      }
+    }
+    saveVisibility();
   }
   return (
     <>
@@ -58,8 +73,8 @@ export default function AdminModules({
         <div>
           <h2>Course modules</h2>
           <p className="muted">
-            Prepare a module privately, then release it to each audience
-            independently. These switches affect this catalog preview only; saved access across student and instructor pages needs backend integration.
+            Review module visibility and assign instructors. These changes by
+            signed-in admins are saved to the LMS; module details remain a preview.
           </p>
         </div>
         <button className="primary" onClick={() => setEditor({})}>
@@ -100,7 +115,7 @@ export default function AdminModules({
                   <legend>Who can see this module?</legend>
                   <label>
                     <span>
-                      Students
+                      All students
                       <small>
                         {module.studentsVisible ? "Visible" : "Hidden"}
                       </small>
@@ -131,15 +146,16 @@ export default function AdminModules({
                 </fieldset>
                 <p className="helper">
                   Assigned instructors:{" "}
-                  {people
-                    .filter(
-                      (person) =>
-                        person.status === "Active" &&
-                        person.role === "Instructor" &&
-                        person.modules.includes(module.id),
+                  {
+                    instructors
+                    .filter((instructor) =>
+                      user?.getAccessTokenSilently
+                        ? (module.teacherIds || []).includes(instructor.id)
+                        : instructor.modules.includes(module.id),
                     )
-                    .map((person) => person.name)
-                    .join(", ") || "None"}
+                    .map((instructor) => instructor.name)
+                    .join(", ") || "None"
+                  }
                 </p>
                 <div className="admin-actions">
                   <button
@@ -150,7 +166,18 @@ export default function AdminModules({
                   </button>
                   <button
                     className="text-button"
-                    onClick={() => onAssign(module)}
+                    onClick={() =>
+                      onAssign(
+                        module,
+                        user?.getAccessTokenSilently
+                          ? module.teacherIds || []
+                          : instructors
+                              .filter((instructor) =>
+                                instructor.modules.includes(module.id),
+                              )
+                              .map((instructor) => instructor.id),
+                      )
+                    }
                   >
                     Assign instructors
                   </button>

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import pool from "../db/pool.js";
+import { isModuleVisibleTo } from "../db/moduleVisibility.js";
 import requireUser from "../middleware/requireUser.js";
 
 // Built-in quizzes. A quiz is a module page with pageType 'quiz'.
@@ -37,8 +38,10 @@ async function isEnrolled(user, moduleId, db = pool) {
 }
 
 // Students enrolled in a module, and every instructor (so they can see how
-// their week fits the course), may view the module's published quizzes.
+// their week fits the course), may view the module's published quizzes,
+// unless an admin has hidden the module from them.
 async function canViewModule(user, moduleId, db = pool) {
+  if (!(await isModuleVisibleTo(user, moduleId, db))) return false;
   return user.isTeacher || isEnrolled(user, moduleId, db);
 }
 
@@ -373,7 +376,12 @@ router.post("/quizzes/:quizId/unpublish", async (req, res) => {
 router.post("/quizzes/:quizId/attempts", async (req, res) => {
   const quizId = toId(req.params.quizId);
   const quiz = quizId && (await findQuiz(quizId));
-  if (!quiz || !quiz.published || !(await isEnrolled(req.user, quiz.moduleid))) {
+  if (
+    !quiz ||
+    !quiz.published ||
+    !(await isEnrolled(req.user, quiz.moduleid)) ||
+    !(await isModuleVisibleTo(req.user, quiz.moduleid))
+  ) {
     return res.status(404).json({ error: "Quiz not found." });
   }
 
