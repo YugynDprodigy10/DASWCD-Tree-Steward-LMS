@@ -5,6 +5,7 @@ import adminRouter from "./routes/admin.js";
 import quizRouter from "./routes/quizzes.js";
 import gradebookRouter from "./routes/gradebook.js";
 import announcementRouter from "./routes/announcements.js";
+import moduleRouter from "./routes/modules.js";
 
 // Builds the Express app without starting it, so tests can run it on any port.
 const app = express();
@@ -14,6 +15,7 @@ app.use("/api/admin", adminRouter);
 app.use("/api", quizRouter);
 app.use("/api", announcementRouter);
 app.use("/api/gradebook", gradebookRouter);
+app.use("/api/modules", moduleRouter);
 
 app.get("/api/health", async (req, res) => {
   const result = await pool.query("SELECT NOW()");

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import pool from "../db/pool.js";
 import requireUser from "../middleware/requireUser.js";
+import { isModuleVisibleTo } from "../db/moduleVisibility.js";
 
 const router = Router();
 router.use(["/modules/:moduleId/announcements", "/announcements"], requireUser);
@@ -37,6 +38,7 @@ async function canManageModule(user, moduleId, db = pool) {
 }
 
 async function canViewModule(user, moduleId, db = pool) {
+  if (!(await isModuleVisibleTo(user, moduleId, db))) return false;
   if (user.isTeacher) return true;
   const result = await db.query(
     "SELECT 1 FROM moduleStudents WHERE moduleID = $1 AND userID = $2 AND status = 'active'",
