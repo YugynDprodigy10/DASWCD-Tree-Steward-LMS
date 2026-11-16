@@ -14,7 +14,7 @@ The backend must enforce permissions; hiding a button in React is not access con
 
 The React app supports Auth0 sign-in and local-only buttons for the three seeded LMS test accounts. The API verifies Auth0 access tokens and saves each Auth0 subject in `users.auth0Sub`; the database's numeric `userID` remains the LMS foreign key. Verified email is used only to link an Auth0 subject to a pre-provisioned LMS account the first time. Local test-account buttons instead use the selected seeded database row and are hard-disabled outside local development. Quiz API requests use signed bearer tokens, never browser-supplied user IDs. Persistent course content, enrollment, overall grades, most admin tools, and messaging are not connected.
 
-[View the shared frontend preview](https://elegant-fox-d4ee0f.netlify.app). This is currently a manual deployment and may lag behind this repository.
+[View the shared frontend preview](https://elegant-fox-d4ee0f.netlify.app). This is currently a manual deployment and may lag behind this repository. The [Netlify full-stack deployment guide](docs/netlify-deployment.md) describes the planned GitHub-connected frontend, API, and database setup.
 
 ## Install prerequisites
 
@@ -197,10 +197,12 @@ Use `npm ci` after cloning or pulling lockfile changes. Use `npm install <packag
 
 ```text
 .github/                CI workflow, issue and pull request templates
-backend/                Express API, database migrations, and backend tests
+backend/                Express API and backend tests
   src/                  API routes, authentication, and database scripts
-  databaseInstructions/ SQL migrations and test data
+  netlify/functions/    Netlify function that serves the API in deployment
+  databaseInstructions/ Local test data (test accounts)
   test/                 Backend tests
+netlify/database/       Numbered SQL migrations (used locally and by Netlify)
 frontend/               React app and frontend tests
 docs/                   GitHub setup and Lighthouse guides
 compose.yaml            Runs the whole app (and the tests) with Docker
