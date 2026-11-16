@@ -33,6 +33,10 @@ services:
       <<: *db
       DB_HOST: database
       DB_PORT: 5432
+    # Migrations live at the repo root (Netlify applies the same files), so
+    # mount them where src/migrate.js looks for them.
+    volumes:
+      - ./netlify/database/migrations:/netlify/database/migrations:ro
     command: ["sh", "-c", "npm run migrate && npm run query"]
 
   api:
@@ -98,6 +102,8 @@ services:
       <<: *db
       DB_HOST: test-database
       DB_PORT: 5432
+    volumes:
+      - ./netlify/database/migrations:/netlify/database/migrations:ro
     command: ["sh", "-c", "npm run migrate && npm test"]
 
   frontend-test:

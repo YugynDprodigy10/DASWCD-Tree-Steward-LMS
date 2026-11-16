@@ -1,0 +1,23 @@
+[build]
+  command = "npm --prefix backend ci && npm --prefix frontend ci && npm --prefix frontend run build"
+  publish = "frontend/dist"
+  functions = "backend/netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "24"
+
+[functions]
+  node_bundler = "esbuild"
+  # jose is ESM-only; bundle it so the function does not try to require() it as CommonJS.
+  external_node_modules = ["express", "pg", "serverless-http"]
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
