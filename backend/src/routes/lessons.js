@@ -34,9 +34,30 @@ function validateUpload(body){
     return { file: { fileName, contentType, sizeBytes } };
 }
 
+// loads one lessonFiles row by id, or null if htere isn't one
+async function findFile(fileId) {
+  const result = await pool.query(
+    `SELECT fileID, moduleID, s3Key, fileName, contentType, sizeBytes, uploaded
+     FROM lessonFiles
+     WHERE fileID = $1`,
+    [fileId],
+  );
+  return result.rows[0] ?? null;
+}
+
+// shapes a lessonFiles row for api
+function describeFile(file){
+  return {
+    fileId: file.fileid,
+    fileName: file.filename,
+    contentType: file.contenttype,
+    sizeBytes: Number(file.sizebytes),
+  };
+}
+
 router.use(["/modules/:moduleId/lessons", "/modules/:moduleId/files", "/lessons", "/files"], requireUser);
 
-// teacher asks to uplaod a file; records (not yet uplaoding) and returns a one-time S3 upload form
+// teacher asks to uplaod a file; records (not yet uploading) and returns a one-time S3 upload form
 router.post("/modules/:moduleId/files/upload", async (req, res) => {
   const moduleId = toId(req.params.moduleId);
 
@@ -74,6 +95,35 @@ router.post("/modules/:moduleId/files/upload", async (req, res) => {
     );
   
   res.status(201).json({ fileId: inserted.rows[0].fileid, url: form.url, fields: form.fields }); 
+});
+
+// browser finished uploading to s3, confirm its there then mark as uploaded
+router.post("/files/:fileId/complete", async (req, res) => {
+  const fileId = toId(req.params.fileId);
+  if (!fileId) return res.status(404).json({ error: "File not found." });
+
+  const file = await findFile(fileId);
+  if (!file) return res.status(404).json({ error: "File not found." });
+
+  if (!(await canManageModule(req.user, file.moduleid))) return res.status(403).json({ error: "Only this module's instructors can manage this file." });
+
+  if (file.uploaded) return res.json(describeFile(file));
+
+  const info = await storage.fileInfo(file.s3key);
+  if (!info) return res.status(409).json({ error: "The upload didn't finish. Try uploading the file again." });
+
+  if (info.contentType !== file.contenttype || info.size !== Number(file.sizebytes)){
+    await storage.deleteFile(file.s3key);
+    return res.status(409).json({ error: "The uploaded file doesn't match. Try uploading again." });
+  }
+
+  await pool.query(
+    `UPDATE lessonFiles
+    SET uploaded = TRUE
+    WHERE fileID = $1`,
+    [fileId]
+  );
+  res.json(describeFile(file));
 });
 
 export default router;

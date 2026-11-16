@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
 
@@ -63,7 +63,7 @@ export const storage = {
   },
 
   async uploadForm(key, contentType) {
-    // allows one uplaod to this key. s3 enforces size, type and 10 minute limits and the file must be the last field
+    // allows one upload to this key. s3 enforces size, type and 10 minute limits and the file must be the last field
     return createPresignedPost(getClient(), {
       Bucket: requiredEnv("S3_BUCKET"),
       Key: key,
@@ -74,5 +74,23 @@ export const storage = {
       ],
       Expires: 600,
     });
+  },
+
+  async fileInfo(key){
+    try{
+      const result = await getClient().send(new HeadObjectCommand({
+        Bucket: requiredEnv("S3_BUCKET"),
+        Key: key,
+      }));
+      return {
+        size: result.ContentLength,
+        contentType: result.ContentType,
+      };
+    } catch (err) {
+        const status = err.$metadata?.httpStatusCode;
+        // without s3:ListBucket, s3 reports missing object as 403 rather than 404
+        if (status === 403 || status === 404) return null;
+        throw err;
+    }
   },
 };

@@ -26,4 +26,9 @@ console.log(response.status);
 if (response.status !== 204){
     console.log(await response.text());
 };
+
+console.log(await storage.fileInfo(formKey));
+
 await storage.deleteFile(formKey);
+
+console.log(await storage.fileInfo(formKey));
