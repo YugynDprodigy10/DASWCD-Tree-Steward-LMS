@@ -2,6 +2,7 @@ import { Router } from "express";
 import pool from "../db/pool.js";
 import requireUser from "../middleware/requireUser.js";
 import { toId, canManageModule, isEnrolled, canViewModule } from "../auth/modulePermissions.js";
+import { inTransaction } from "../db/transaction.js";
 
 // Built-in quizzes. A quiz is a module page with pageType 'quiz'.
 // Instructors assigned to the module (and admins) build and publish quizzes.
@@ -110,22 +111,6 @@ async function insertChoices(client, questionId, choices) {
        VALUES ($1, $2, $3, $4)`,
       [questionId, choice.text, choice.isCorrect, index + 1],
     );
-  }
-}
-
-// Runs work inside one database transaction, so a failure leaves nothing half-saved.
-async function inTransaction(work) {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    const result = await work(client);
-    await client.query("COMMIT");
-    return result;
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
   }
 }
 

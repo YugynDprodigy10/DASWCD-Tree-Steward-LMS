@@ -4,6 +4,7 @@ import requireUser from "../middleware/requireUser.js";
 import { toId, canManageModule, isEnrolled, canViewModule } from "../auth/modulePermissions.js";
 import { randomUUID } from "node:crypto";
 import { storage, MAX_FILE_BYTES } from "../storage/s3.js";
+import { inTransaction } from "../db/transaction.js";
 
 // lessons are ordered text, pdf and video blocks
 // teachers assigned to the module, and admins, create and edit lessons and upload files
