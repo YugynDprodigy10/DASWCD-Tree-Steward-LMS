@@ -55,9 +55,27 @@ function describeFile(file){
   };
 }
 
+// shape lesson for api
+function describeLesson(lesson, content){
+  return {
+    lessonId: lesson.lessonid,
+    title: lesson.title,
+    published: lesson.published,
+    content: content,
+    updatedAt: lesson.updatedat,
+  };
+}
+
+// lists the fileids a lesson's content points at
+function fileIdsIn(content){
+  return content
+    .filter((block) => ["pdf","video"].includes(block.type))
+    .map((block) => block.fileId);
+}
+
 router.use(["/modules/:moduleId/lessons", "/modules/:moduleId/files", "/lessons", "/files"], requireUser);
 
-// teacher asks to uplaod a file; records (not yet uploading) and returns a one-time S3 upload form
+// teacher asks to upload a file; records (not yet uploading) and returns a one-time S3 upload form
 router.post("/modules/:moduleId/files/upload", async (req, res) => {
   const moduleId = toId(req.params.moduleId);
 
