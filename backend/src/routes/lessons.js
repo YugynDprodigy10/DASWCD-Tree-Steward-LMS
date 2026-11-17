@@ -15,6 +15,52 @@ const router = Router();
 // must match the contentType check in 006_module_lessons.sql
 const ALLOWED_TYPES = ["application/pdf", "video/mp4", "video/webm"];
 
+// size limits for a saved lesson. database doesn't enforce these so this is the only place to check
+const MAX_BLOCKS = 50; // blocks per lesson
+const MAX_HTML = 50000; // characters per text block
+const MAX_TRANSCRIPT = 20000; // characters per video transcript
+
+// checks a lesson sent by the editor. returns { lesson } or { error }
+function validateLesson(body){
+  const title = typeof body?.title === "string" ? body.title.trim() : "";
+  if (!title || title.length > 150) return { error: "Please enter a title (up to 150 characters)." };
+
+  const published = body?.published === true;
+
+  const content = Array.isArray(body?.content) ? body?.content : [];
+  if (content.length > MAX_BLOCKS) {
+    return { error: `A lesson can have at most ${MAX_BLOCKS} blocks.` };
+  }
+
+  const cleaned = [];
+  for (const block of content) {
+    if (block?.type === "text"){
+      const html = typeof block.html === "string" ? block.html : "";
+      if (html.length > MAX_HTML) return { error: "A text block is too long." };
+      cleaned.push({ type: "text", html });
+    } else if (block?.type === "pdf" || block?.type === "video"){
+      const fileId = toId(block.fileId);
+      if (!fileId) return { error: "Every PDF or video block needs a file." };
+
+      if (block.type === "pdf"){
+        cleaned.push({ type: "pdf", fileId });
+      } else {
+        const transcript = typeof block.transcript === "string" ? block.transcript : "";
+        if (transcript.length > MAX_TRANSCRIPT) return { error: "Video transcript is too long."};
+        cleaned.push({ type: "video", fileId, transcript });
+      }
+    } else {
+      return { error: "Unknown lesson block." };
+    }
+  }
+
+  const ids = fileIdsIn(cleaned);
+  if (new Set(ids).size !== ids.length){
+    return { error: "Each file can only be used once in a lesson." };
+  }
+  return { lesson: { title, published, content: cleaned } };
+}
+
 // checks upload request from the lesson editor. returns file or error message
 function validateUpload(body){
     const fileName = typeof body?.fileName === "string" ? body.fileName.trim() : "";
@@ -35,7 +81,7 @@ function validateUpload(body){
     return { file: { fileName, contentType, sizeBytes } };
 }
 
-// loads one lessonFiles row by id, or null if htere isn't one
+// loads one lessonFiles row by id, or null if there isn't one
 async function findFile(fileId) {
   const result = await pool.query(
     `SELECT fileID, moduleID, s3Key, fileName, contentType, sizeBytes, uploaded
