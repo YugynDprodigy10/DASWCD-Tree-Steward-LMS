@@ -144,4 +144,49 @@ router.post("/files/:fileId/complete", async (req, res) => {
   res.json(describeFile(file));
 });
 
+// lists a module's lessons. managers see drafts too, others see published only 
+// file blocks get the file's name, type and a fresh 15 min signed link
+router.get("/modules/:moduleId/lessons", async (req, res) => {
+  const moduleId = toId(req.params.moduleId);
+  if (!moduleId) return res.status(404).json({ error: "Module not found." });
+
+  const manager = await canManageModule(req.user, moduleId);
+  if (!manager && !(await canViewModule(req.user, moduleId))){
+    return res.status(403).json({ error: "You are not part of this module." });
+  }
+  const lessons = await pool.query(
+    `SELECT lessonID, title, content, published, updatedAt
+    FROM moduleLessons
+    WHERE moduleID = $1 AND (published OR $2)
+    ORDER BY createdAt, lessonID`,
+    [moduleId, manager]
+  );
+
+  const ids = lessons.rows.flatMap((lesson) => fileIdsIn(lesson.content));
+  const files = await pool.query(
+    `SELECT fileID, s3Key, fileName, contentType
+    FROM lessonFiles
+    WHERE fileID = ANY($1) AND uploaded`,
+    [ids]
+  );
+
+  const filesById = new Map(files.rows.map((file) => [file.fileid, file]));
+
+  const result = await Promise.all(lessons.rows.map(async (lesson) => {
+    const content = await Promise.all(lesson.content.map(async (block) => {
+      const file = filesById.get(block.fileId);
+      if (!file) return block;
+      return {
+        ...block,
+        fileName: file.filename,
+        contentType: file.contenttype,
+        url: await storage.signedUrl(file.s3key, file.filename),
+      };
+    }));
+    return describeLesson(lesson, content);
+  }));
+
+  res.json({ lessons: result });
+});
+
 export default router;
