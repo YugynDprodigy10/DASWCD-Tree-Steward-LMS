@@ -57,6 +57,15 @@ async function submitAnswer(quizId, question, correct) {
 
 test("students see their own equal-weight module grades when every published quiz is attempted", async () => {
   const first = await createPublishedQuiz("Long quiz", 5);
+  // The student retakes this quiz below, so allow two attempts.
+  assert.equal(
+    (await api(`/quizzes/${first.quizId}`, {
+      as: "teacher",
+      method: "PATCH",
+      body: { maxAttempts: 2 },
+    })).status,
+    200,
+  );
   const second = await createPublishedQuiz("Short quiz", 1);
   const draft = await api(`/modules/${context.moduleId}/quizzes`, {
     as: "teacher",
