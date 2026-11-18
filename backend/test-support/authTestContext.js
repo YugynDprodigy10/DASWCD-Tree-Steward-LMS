@@ -102,7 +102,9 @@ export function createAuthTestContext(prefix) {
       headers,
       body: body && JSON.stringify(body),
     });
-    return { status: response.status, body: await response.json() };
+    // 204 responses (e.g. deleting a lesson) have no body, so only parse when there is one
+    const text = await response.text();
+    return { status: response.status, body: text ? JSON.parse(text) : null };
   }
 
   async function setup({ localTestAccount = false } = {}) {
@@ -167,6 +169,9 @@ export function createAuthTestContext(prefix) {
         [moduleId],
       );
       await pool.query("DELETE FROM modulePages WHERE moduleID = $1", [moduleId]);
+      // lesson files reference lessons, and both reference the module, so they go first
+      await pool.query("DELETE FROM lessonFiles WHERE moduleID = $1", [moduleId]);
+      await pool.query("DELETE FROM moduleLessons WHERE moduleID = $1", [moduleId]);
       await pool.query("DELETE FROM moduleTeachers WHERE moduleID = $1", [moduleId]);
       await pool.query("DELETE FROM moduleStudents WHERE moduleID = $1", [moduleId]);
       await pool.query("DELETE FROM modules WHERE moduleID = $1", [moduleId]);

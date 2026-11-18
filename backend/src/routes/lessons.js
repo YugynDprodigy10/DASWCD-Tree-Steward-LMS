@@ -348,6 +348,8 @@ router.put("/lessons/:lessonId", async (req, res) => {
   if (!saved) return res.status(404).json({ error: "Lesson not found." });
   if (saved.error) return res.status(400).json({ error: saved.error });
 
+  // s3 isn't part of the transaction, so delete files only after the save comitted.
+  // failed delete just leaves an unused file in the bucket. save still succeeded
   for (const key of saved.removedKeys) {
     try {
       await storage.deleteFile(key);
@@ -357,6 +359,32 @@ router.put("/lessons/:lessonId", async (req, res) => {
   }
 
   res.json({ lesson: describeLesson(saved.lesson, saved.lesson.content) });
+});
+
+// deletes a lesson and its files. S3 goes first so a failed delete can just be retried
+// the rows still list every key, and deleting an already-gone S3 key succeeds
+router.delete("/lessons/:lessonId", async (req, res) => {
+  const lessonId = toId(req.params.lessonId);
+  if (!lessonId) return res.status(404).json({ error: "Lesson not found." });
+  const existing = await findLesson(lessonId);
+  if (!existing) return res.status(404).json({ error: "Lesson not found." });
+  if (!(await canManageModule(req.user, existing.moduleid))) {
+    return res.status(403).json({ error: "Only this module's instructors can delete lessons." });
+  }
+
+  // if an S3 delete fails, stop here before any rows are removed
+  const files = await pool.query("SELECT s3Key FROM lessonFiles WHERE lessonID = $1", [lessonId]);
+  for (const file of files.rows) {
+    await storage.deleteFile(file.s3key);
+  }
+
+  // file rows first: lessonFiles.lessonID references moduleLessons, so the lesson can't go first
+  await inTransaction(async (client) => {
+    await client.query("DELETE FROM lessonFiles WHERE lessonID = $1", [lessonId]);
+    await client.query("DELETE FROM moduleLessons WHERE lessonID = $1", [lessonId]);
+  });
+
+  res.status(204).end();
 });
 
 export default router;
