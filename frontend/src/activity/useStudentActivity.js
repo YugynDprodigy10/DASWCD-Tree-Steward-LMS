@@ -11,9 +11,11 @@ function trackedPage({ moduleId, page, quizId, detail }) {
     };
   }
   if (detail?.id !== undefined && detail?.id !== null) {
+    const contentId = Number(detail.id);
+    if (!Number.isSafeInteger(contentId) || contentId <= 0) return null;
     return {
       moduleId,
-      pageKey: `content:${detail.id}`,
+      pageKey: `content:${contentId}`,
       title: `${detail.type}: ${detail.title}`,
     };
   }
