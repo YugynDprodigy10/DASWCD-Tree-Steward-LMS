@@ -37,7 +37,7 @@ For a quick one-off check, run `npm run build` and `npm run preview`, open the p
 
 ## In CI
 
-The **Frontend checks** workflow (`.github/workflows/frontend-ci.yml`) runs Lighthouse after the build on every pull request to `main`, on pushes to `main`, and on manual runs.
+The **Lighthouse** job in the **CI** workflow (`.github/workflows/ci.yml`) runs Lighthouse after the build on every pull request to `main`, on pushes to `main`, and on manual runs.
 
 - Scores: open the workflow run and expand the **Lighthouse** step.
 - Full reports: download **lighthouse-reports** under **Artifacts** at the bottom of the run summary. They are uploaded even if an earlier step fails.

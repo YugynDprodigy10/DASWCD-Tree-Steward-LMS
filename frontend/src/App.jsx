@@ -6,7 +6,8 @@ import QuizWorkspace from "./quiz/QuizWorkspace";
 import QuizCard from "./quiz/QuizCard.jsx";
 import { useModuleQuizzes } from "./quiz/useModuleQuizzes";
 import QuizRunner from "./quiz/QuizRunner";
-import { initialBlocks, modules } from "./data/course";
+import { initialBlocks } from "./data/course";
+import { useCourseModules } from "./course/useCourseModules.js";
 import "./App.css";
 import ApiStatus from "./components/ApiStatus";
 import AdminWorkspace from "./components/AdminWorkspace";
@@ -16,6 +17,7 @@ import { plainTextHtml } from "./materials/content.js";
 import { useRoute } from "./navigation/useRoute.js";
 import { navigateRoute } from "./navigation/route.js";
 import Gradebook from "./gradebook/Gradebook.jsx";
+import { useAnnouncements } from "./announcements/useAnnouncements.js";
 
 function restoredDemoRole() {
   try {
@@ -240,7 +242,9 @@ function CourseApp({ auth0, testLoginEnabled }) {
   const authSubject = auth0?.profile?.sub;
   const getAccessTokenSilently = auth0?.getAccessTokenSilently;
   const isResolvingAccount = Boolean(isAuthenticated && !user && !authMessage);
+  const modules = useCourseModules(user);
   const materials = useMaterials(user, moduleId, Boolean(role));
+  const announcements = useAnnouncements(user, moduleId, Boolean(role));
   const isInstructor = role === "instructor" && !preview;
   const canEdit = isInstructor && moduleId === 2;
   const canEditQuiz = isInstructor && (user ? true : moduleId === 2);
@@ -250,10 +254,33 @@ function CourseApp({ auth0, testLoginEnabled }) {
     isInstructor,
     Boolean(role) && page === "Home" && !route.quizId,
   );
-  const currentModule = modules.find((item) => item.id === moduleId);
+  const moduleIndex = modules.findIndex((item) => item.id === moduleId);
+  const currentModule = modules[moduleIndex] ?? modules[0];
+  const previousModule = moduleIndex > 0 ? modules[moduleIndex - 1] : null;
+  const nextModule =
+    moduleIndex >= 0 && moduleIndex < modules.length - 1
+      ? modules[moduleIndex + 1]
+      : null;
+  // If an admin hid the module in the address bar, open the first visible one.
+  const firstVisibleModuleId = modules[0]?.id;
+  useEffect(() => {
+    if (moduleIndex === -1 && firstVisibleModuleId) {
+      navigateRoute({
+        moduleId: firstVisibleModuleId,
+        page: "Home",
+        quizId: null,
+        builderId: null,
+      });
+    }
+  }, [moduleIndex, firstVisibleModuleId]);
   const materialIds = new Set(materials.items.map((item) => item.id));
   const shownBlocks = [
-    ...blocks.filter((item) => !materialIds.has(item.id)),
+    ...blocks.filter(
+      (item) =>
+        !materialIds.has(item.id) &&
+        !(user && item.type === "Announcement"),
+    ),
+    ...announcements.items,
     ...materials.items,
   ].filter(
     (item) =>
@@ -388,6 +415,16 @@ function CourseApp({ auth0, testLoginEnabled }) {
     if (values.type === "Learning material") {
       await materials.save(values, file, onProgress);
       navigateRoute({ page: "Home", quizId: null, builderId: null });
+      setEditor(null);
+      setMessage(
+        values.published
+          ? `Published “${values.title}” to students.`
+          : `Saved “${values.title}” as a draft. Students can't see it yet.`,
+      );
+      return;
+    }
+    if (values.type === "Announcement" && user) {
+      await announcements.save(values);
       setEditor(null);
       setMessage(
         values.published
@@ -552,7 +589,9 @@ const navItems = isInstructor
                 {modules.map((item) => (
                   <option key={item.id} value={item.id}>
                     Week {item.id}: {item.title}
-                    {isInstructor && item.id === 2 ? " · Assigned to you" : ""}
+                    {isInstructor && (item.assigned ?? item.id === 2)
+                      ? " · Assigned to you"
+                      : ""}
                   </option>
                 ))}
               </select>
@@ -573,7 +612,7 @@ const navItems = isInstructor
             <div>
               <h1 ref={heading} tabIndex={-1}>
                 {page === "Home"
-                  ? `Module ${moduleId}: ${currentModule.title}`
+                  ? `Module ${moduleId}: ${currentModule?.title ?? ""}`
                   : page === "Create"
                     ? "Create content"
                     : page === "Quizzes"
@@ -640,6 +679,11 @@ const navItems = isInstructor
               {materials.error && (
                 <p role="alert" className="notice">
                   {materials.error}
+                </p>
+              )}
+              {announcements.error && (
+                <p role="alert" className="notice">
+                  {announcements.error}
                 </p>
               )}
               <section className="content-stack" aria-label="Module content">
@@ -747,15 +791,15 @@ const navItems = isInstructor
               <div className="module-pagination">
                 <button
                   className="text-button"
-                  disabled={moduleId === 1}
-                  onClick={() => setModuleId(moduleId - 1)}
+                  disabled={!previousModule}
+                  onClick={() => setModuleId(previousModule.id)}
                 >
                   ← Previous module
                 </button>
                 <button
                   className="text-button"
-                  disabled={moduleId === 12}
-                  onClick={() => setModuleId(moduleId + 1)}
+                  disabled={!nextModule}
+                  onClick={() => setModuleId(nextModule.id)}
                 >
                   Next module →
                 </button>

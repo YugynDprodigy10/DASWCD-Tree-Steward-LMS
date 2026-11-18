@@ -1,5 +1,6 @@
 // shared rules for who can manage or view a module used by the quiz and lesson routes
 import pool from "../db/pool.js";
+import { isModuleVisibleTo } from "../db/moduleVisibility.js";
 
 export function toId(value) {
   const id = Number(value);
@@ -25,7 +26,9 @@ export async function isEnrolled(user, moduleId, db = pool) {
 }
 
 // Students enrolled in a module, and every instructor (so they can see how
-// their week fits the course), may view the module's published content.
+// their week fits the course), may view the module's published content, unless an 
+// admin has hidden the module from them
 export async function canViewModule(user, moduleId, db = pool) {
+  if (!(await isModuleVisibleTo(user, moduleId, db))) return false;
   return user.isTeacher || isEnrolled(user, moduleId, db);
 }

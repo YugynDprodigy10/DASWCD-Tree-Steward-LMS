@@ -4,9 +4,15 @@
 
 import { execFileSync } from "node:child_process";
 import { createServer } from "node:net";
+import { fileURLToPath } from "node:url";
 import pg from "pg";
 
 const { Client } = pg;
+
+// The Docker Compose file lives at the repository root, so point every
+// `docker compose` command at it no matter which folder the script runs from.
+const projectRoot = fileURLToPath(new URL("../../", import.meta.url));
+const compose = (...args) => ["compose", "--project-directory", projectRoot, ...args];
 
 const connectionSettings = {
   user: process.env.POSTGRES_USER ?? "appuser",
@@ -17,7 +23,7 @@ const connectionSettings = {
 function getRunningDatabasePort() { // Check whether the Docker database is already running.
   const runningContainer = execFileSync(
     "docker",
-    ["compose", "ps", "--status", "running", "-q", "database"],
+    compose("ps", "--status", "running", "-q", "database"),
     { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }
   ).trim();
 
@@ -27,7 +33,7 @@ function getRunningDatabasePort() { // Check whether the Docker database is alre
 
   const publishedPort = execFileSync(
     "docker",
-    ["compose", "port", "database", "5432"],
+    compose("port", "database", "5432"),
     { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }
   ).trim();
   const match = publishedPort.match(/:(\d+)\s*$/m);
@@ -117,7 +123,8 @@ async function withDatabase(callback) {
     host = "127.0.0.1";
 
     console.log(`Starting Docker database on host port ${hostPort}...`);
-    execFileSync("docker", ["compose", "up", "-d"], { stdio: "inherit" });
+    // Start only the database; the full app is started with `docker compose up` instead.
+    execFileSync("docker", compose("up", "-d", "database"), { stdio: "inherit" });
   }
 
   const client = await connectWithRetry(host, hostPort);

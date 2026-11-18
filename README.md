@@ -39,13 +39,35 @@ git --version
 
 Use Node 24 for consistency with CI. If Windows still finds an old version, run `where.exe node` and `where.exe npm` to find competing installations. If you use a Node version manager, select Node 24 through that manager.
 
-## Run the frontend
+## Quick start (Docker)
+
+With Docker Desktop running, from the repository root:
+
+```sh
+docker compose up --build
+```
+
+This starts the database, applies migrations, creates the local test accounts, and runs the API (http://localhost:3000) and the frontend (http://localhost:5173). Saving a file reloads the app automatically. Press Ctrl+C to stop; `docker compose down` removes the containers but keeps your data.
+
+Sign in with the **Test student**, **Test instructor**, or **Test administrator** buttons. To use real Auth0 sign-in, copy `backend/.env.example` to `backend/.env` and `frontend/.env.example` to `frontend/.env` and fill in the Auth0 values; Compose reads both files.
+
+## Running the tests
+
+```sh
+./test.sh
+```
+
+This runs every automated check in Docker, exactly as GitHub Actions does on each pull request: migrations and all API tests against a fresh, throwaway database, then frontend lint, tests, and a production build.
+
+
+## Running without Docker
 
 
 ## Enable/Disable Test Users (for production)
 
-Set ENABLE_TEST_LOGIN=true or false in the backend/.env file.
-Set VITE_ENABLE_TEST_LOGIN=true or false in frontend/.env.local file.
+With Docker Compose, test sign-in is on automatically for local development.
+
+When running the servers by hand, set `ENABLE_TEST_LOGIN=true` and `NODE_ENV=development` in `backend/.env`, and `VITE_ENABLE_TEST_LOGIN=true` in `frontend/.env`. Test sign-in only works when `NODE_ENV` is `development` or `test`, so it can't be enabled in a deployment by mistake.
 
 ### Configuring Auth0 for the final application
 
@@ -124,7 +146,7 @@ The Docker database is published on host port `5434` by default because a local 
 
 To create the sample LMS rows, run `npm run query` in `backend`. The **Test student**, **Test instructor**, and **Test administrator** buttons use those database accounts directly and do not require Auth0. To exercise Auth0 instead, create Auth0 users with matching verified emails `teststudent1@example.com`, `testteacher1@example.com`, or `testadmin1@example.com`; their LMS roles still come from the database, and their passwords are managed by Auth0.
 
-For local test-account buttons only, set `ENABLE_TEST_LOGIN=true` in `backend/.env` and `VITE_ENABLE_TEST_LOGIN=true` in `frontend/.env.local`, then restart both servers. These endpoints issue two-hour local test tokens signed with a random key that exists only in backend memory, accept requests only from loopback, and are disabled when `NODE_ENV=production`. Test tokens stay in app memory, except for a short-lived launch record when opening a quiz in another tab. The buttons are not a production login method; leave both flags false for deployments. Local test tokens become invalid when the backend restarts.
+For local test-account buttons only, set `ENABLE_TEST_LOGIN=true` and `NODE_ENV=development` in `backend/.env` and `VITE_ENABLE_TEST_LOGIN=true` in `frontend/.env`, then restart both servers. These endpoints issue two-hour local test tokens signed with a random key that exists only in backend memory, and they only work when `NODE_ENV` is `development` or `test`. The buttons are not a production login method; leave both flags off for deployments. Local test tokens become invalid when the backend restarts.
 
 ### Auth0 email capabilities
 
@@ -169,33 +191,35 @@ npm run preview
 - `build`: creates the deployable site in `frontend/dist`.
 - `preview`: serves the production build locally; open its printed URL.
 
-Use `npm ci` after cloning or pulling lockfile changes. Use `npm install <package>` only when intentionally adding a dependency, and commit both package files. For frontend quiz/auth adapter tests, run `node --test test/quiz.test.js` from `frontend`. Backend API tests run with `npm test` from `backend` after starting the database and applying migrations. Backend authentication and invitation coverage is in `backend/test/auth.test.js`; quiz API coverage stays in `backend/test/quizzes.test.js`. Both use the shared Auth0 and database fixtures in `backend/test-support/authTestContext.js`.
+Use `npm ci` after cloning or pulling lockfile changes. Use `npm install <package>` only when intentionally adding a dependency, and commit both package files. To run every automated check the way CI does, run `./test.sh` from the repository root (see "Running the tests" above). To run them individually: `npm test` in `frontend`, or `npm test` in `backend` with the database running and migrations applied. Backend authentication and invitation tests are in `backend/test/auth.test.js`, quiz tests in `backend/test/quizzes.test.js`, and gradebook tests in `backend/test/gradebook.test.js`. They share the Auth0 and database fixtures in `backend/test-support/authTestContext.js`.
 
 ## Repository layout
 
 ```text
-.github/                CI workflow and pull request template
-backend/                Express API prototype
-frontend/
-  src/                  React UI and existing Node database utilities
-  public/               Static assets
-  databaseInstructions/ SQL migrations and query examples
-  docker-compose.yml    Local database/migration setup
-  package.json          Frontend commands and dependencies
-docs/                   GitHub administration guide
+.github/                CI workflow, issue and pull request templates
+backend/                Express API and backend tests
+  src/                  API routes, authentication, and database scripts
+  netlify/functions/    Netlify function that serves the API in deployment
+  databaseInstructions/ Local test data (test accounts)
+  test/                 Backend tests
+netlify/database/       Numbered SQL migrations (used locally and by Netlify)
+frontend/               React app and frontend tests
+docs/                   GitHub setup and Lighthouse guides
+compose.yaml            Runs the whole app (and the tests) with Docker
+test.sh                 Runs every automated check
 ```
 
 The database utilities currently live under `frontend/src`; they run in Node and must never be imported into browser components. Moving them into the backend is a follow-up task to coordinate with the database owner.
 
 ## Backend and database
 
-See [frontend setup and database commands](frontend/README.md) for the existing Docker migration workflow. The backend's `/api/health` endpoint queries PostgreSQL, so it needs a running database and matching connection settings. Full-stack setup is separate from the frontend quick start above.
+The database, migrations, and API run together with `docker compose up --build` (see "Quick start" above). The backend's `/api/health` endpoint queries PostgreSQL, so it needs a running database.
 
 ## Collaboration and CI
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before starting a branch. Open a pull request into `main`, use the provided template, and request a teammate's review.
 
-The **Frontend CI** workflow runs dependency installation, ESLint, and the production build for every PR targeting `main` and every push to `main`. It checks the frontend and its Node utilities; it does not yet test the backend or database, and it does not deploy to Netlify.
+The **CI** workflow runs on every pull request to `main` and every push to `main`. It runs `./test.sh` (backend tests on a fresh database, plus frontend lint, tests, and build), checks that the development containers build, and runs a Lighthouse audit (see [Lighthouse checks](docs/lighthouse.md)). It does not deploy.
 
 Repository admins should follow [GitHub setup](docs/github-setup.md) to enable branch protection. Adding a workflow file alone does not prevent direct pushes or failed merges.
 

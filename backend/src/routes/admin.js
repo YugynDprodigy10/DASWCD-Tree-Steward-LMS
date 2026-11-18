@@ -22,6 +22,237 @@ const roleColumns = {
   administrator: ["Administrator", "administrator"],
 };
 
+function toId(value) {
+  const id = Number(value);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+function describeModule(row, instructors = []) {
+  return {
+    id: row.moduleid,
+    title: row.name,
+    description: "",
+    studentsVisible: row.studentsvisible,
+    instructorsVisible: row.instructorsvisible,
+    instructors,
+    teacherIds: instructors.map((instructor) => instructor.id),
+  };
+}
+
+async function inTransaction(work) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await work(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+router.get("/modules", async (req, res, next) => {
+  try {
+    const [moduleResult, teacherResult, assignmentResult] = await Promise.all([
+      pool.query(
+        `SELECT moduleID, name, studentsVisible, instructorsVisible
+         FROM modules ORDER BY moduleID`,
+      ),
+      pool.query(
+        `SELECT userID, COALESCE(NULLIF(displayName, ''), username) AS name,
+                email
+         FROM users WHERE teacher = TRUE
+         ORDER BY name, userID`,
+      ),
+      pool.query(
+        `SELECT moduleID, userID FROM moduleTeachers ORDER BY moduleID, userID`,
+      ),
+    ]);
+
+    const teachers = teacherResult.rows.map((row) => ({
+      id: row.userid,
+      name: row.name,
+      email: row.email,
+    }));
+    const teachersById = new Map(teachers.map((teacher) => [teacher.id, teacher]));
+    const assignments = new Map();
+    for (const row of assignmentResult.rows) {
+      const teacher = teachersById.get(row.userid);
+      if (!teacher) continue;
+      const assigned = assignments.get(row.moduleid) ?? [];
+      assigned.push(teacher);
+      assignments.set(row.moduleid, assigned);
+    }
+
+    return res.json({
+      modules: moduleResult.rows.map((module) =>
+        describeModule(module, assignments.get(module.moduleid) ?? []),
+      ),
+      teachers,
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch("/modules/:moduleId/teachers", async (req, res, next) => {
+  const moduleId = toId(req.params.moduleId);
+  const { teacherIds } = req.body ?? {};
+  if (!moduleId) return res.status(404).json({ error: "Module not found." });
+  if (
+    !Array.isArray(teacherIds) ||
+    teacherIds.some((id) => !Number.isInteger(id) || id <= 0) ||
+    new Set(teacherIds).size !== teacherIds.length
+  ) {
+    return res.status(400).json({ error: "Choose valid instructor assignments." });
+  }
+
+  try {
+    const updated = await inTransaction(async (client) => {
+      const moduleResult = await client.query(
+        `SELECT moduleID, name, studentsVisible, instructorsVisible
+         FROM modules WHERE moduleID = $1 FOR UPDATE`,
+        [moduleId],
+      );
+      if (!moduleResult.rows[0]) return null;
+
+      const teacherResult = await client.query(
+        "SELECT userID FROM users WHERE teacher = TRUE AND userID = ANY($1)",
+        [teacherIds],
+      );
+      if (teacherResult.rowCount !== teacherIds.length) {
+        return { invalidTeachers: true };
+      }
+
+      await client.query("DELETE FROM moduleTeachers WHERE moduleID = $1", [moduleId]);
+      for (const teacherId of teacherIds) {
+        await client.query(
+          "INSERT INTO moduleTeachers (moduleID, userID) VALUES ($1, $2)",
+          [moduleId, teacherId],
+        );
+      }
+      return { module: moduleResult.rows[0] };
+    });
+
+    if (!updated) return res.status(404).json({ error: "Module not found." });
+    if (updated.invalidTeachers) {
+      return res.status(400).json({ error: "Choose existing instructor accounts." });
+    }
+
+    const instructors = teacherIds.length
+      ? await pool.query(
+          `SELECT userID, COALESCE(NULLIF(displayName, ''), username) AS name,
+                  email
+           FROM users WHERE teacher = TRUE AND userID = ANY($1)
+           ORDER BY name, userID`,
+          [teacherIds],
+        )
+      : { rows: [] };
+    return res.json({
+      module: describeModule(
+        updated.module,
+        instructors.rows.map((row) => ({
+          id: row.userid,
+          name: row.name,
+          email: row.email,
+        })),
+      ),
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch("/modules/:moduleId/visibility", async (req, res, next) => {
+  const moduleId = toId(req.params.moduleId);
+  const body = req.body ?? {};
+  const hasStudentsVisible = Object.hasOwn(body, "studentsVisible");
+  const hasInstructorsVisible = Object.hasOwn(body, "instructorsVisible");
+  if (!moduleId) return res.status(404).json({ error: "Module not found." });
+  if (
+    (!hasStudentsVisible && !hasInstructorsVisible) ||
+    (hasStudentsVisible && typeof body.studentsVisible !== "boolean") ||
+    (hasInstructorsVisible && typeof body.instructorsVisible !== "boolean")
+  ) {
+    return res.status(400).json({ error: "Choose valid module visibility settings." });
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE modules
+       SET studentsVisible = COALESCE($2, studentsVisible),
+           instructorsVisible = COALESCE($3, instructorsVisible)
+       WHERE moduleID = $1
+       RETURNING moduleID, name, studentsVisible, instructorsVisible`,
+      [
+        moduleId,
+        hasStudentsVisible ? body.studentsVisible : null,
+        hasInstructorsVisible ? body.instructorsVisible : null,
+      ],
+    );
+    if (!result.rows[0]) {
+      return res.status(404).json({ error: "Module not found." });
+    }
+    const row = result.rows[0];
+    return res.json({
+      module: {
+        id: row.moduleid,
+        title: row.name,
+        studentsVisible: row.studentsvisible,
+        instructorsVisible: row.instructorsvisible,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get("/people", async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT u.userID, u.displayName, u.username, u.email,
+              u.student, u.teacher, u.administrator,
+              COALESCE(
+                array_agg(DISTINCT CASE
+                  WHEN u.teacher THEN mt.moduleID
+                  WHEN u.student THEN ms.moduleID
+                  ELSE NULL
+                END) FILTER (WHERE CASE
+                  WHEN u.teacher THEN mt.moduleID
+                  WHEN u.student THEN ms.moduleID
+                  ELSE NULL
+                END IS NOT NULL),
+                ARRAY[]::int[]
+              ) AS moduleIds
+       FROM users u
+       LEFT JOIN moduleTeachers mt ON mt.userID = u.userID
+       LEFT JOIN moduleStudents ms ON ms.userID = u.userID AND ms.status = 'active'
+       WHERE u.auth0InvitePending = FALSE
+       GROUP BY u.userID
+       ORDER BY COALESCE(NULLIF(u.displayName, ''), u.username), u.userID`,
+    );
+    return res.json({
+      people: result.rows.map((row) => ({
+        id: row.userid,
+        name: row.displayname || row.username,
+        email: row.email,
+        role: row.administrator
+          ? "Administrator"
+          : row.teacher
+            ? "Instructor"
+            : "Student",
+        status: "Active",
+        modules: row.moduleids,
+      })),
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 function validateInvite(body) {
   const name = typeof body?.name === "string" ? body.name.trim() : "";
   const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
