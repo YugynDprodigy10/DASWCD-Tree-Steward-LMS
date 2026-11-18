@@ -1,0 +1,121 @@
+.student-analytics {
+  margin: 24px 0;
+}
+
+.analytics-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.analytics-toolbar label {
+  font-weight: 600;
+}
+
+.analytics-toolbar select {
+  width: min(100%, 360px);
+}
+
+.analytics-note,
+.analytics-empty {
+  padding: 16px 18px;
+  border: 1px solid #d7ddce;
+  border-radius: 9px;
+  background: #fff;
+  color: #53614f;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.analytics-panel {
+  margin-top: 20px;
+  padding: 22px;
+  border: 1px solid #d7ddce;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.analytics-panel-heading,
+.analytics-page-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.analytics-panel-heading h2 {
+  margin: 5px 0 0;
+}
+
+.analytics-panel-heading > p {
+  margin: 0;
+  text-align: right;
+  font-weight: 650;
+  color: #355c43;
+}
+
+.analytics-panel-heading > p small,
+.analytics-list li > small {
+  display: block;
+  margin-top: 4px;
+  color: #697568;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.analytics-list {
+  display: grid;
+  gap: 18px;
+  padding-left: 24px;
+  margin: 24px 0 0;
+}
+
+.analytics-list li {
+  padding-left: 4px;
+}
+
+.analytics-page-heading strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.analytics-page-heading span {
+  flex-shrink: 0;
+  color: #355c43;
+  font-weight: 650;
+}
+
+.analytics-list progress {
+  display: block;
+  width: 100%;
+  height: 12px;
+  margin: 8px 0 2px;
+  accent-color: #426d4d;
+}
+
+.analytics-empty {
+  margin: 24px 0;
+}
+
+.analytics-empty h2 {
+  margin: 0 0 8px;
+}
+
+.analytics-empty p {
+  margin: 0;
+}
+
+@media (max-width: 560px) {
+  .analytics-panel {
+    padding: 16px;
+  }
+
+  .analytics-panel-heading {
+    flex-direction: column;
+  }
+
+  .analytics-panel-heading > p {
+    text-align: left;
+  }
+}

@@ -59,6 +59,9 @@ Sign in with the **Test student**, **Test instructor**, or **Test administrator*
 
 This runs every automated check in Docker, exactly as GitHub Actions does on each pull request: migrations and all API tests against a fresh, throwaway database, then frontend lint, tests, and a production build.
 
+## Student activity analytics
+
+Signed-in students' visits to **My progress**, opened module content, and quizzes are recorded. The module Home screen is excluded. Time is counted only while the browser tab is visible, and pauses when it is hidden. Teachers can view analytics for their assigned modules; administrators can view all modules. Each module's analytics shows its five content pages with the highest share of that module's tracked content time. Navigation-only time is recorded but not included in content-page percentages.
 
 ## Running without Docker
 
