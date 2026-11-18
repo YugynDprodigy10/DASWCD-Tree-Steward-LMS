@@ -92,6 +92,17 @@ async function findFile(fileId) {
   return result.rows[0] ?? null;
 }
 
+// loads one lesson by id or null if there isn't one
+async function findLesson(lessonId, db = pool){
+  const result = await db.query(
+    `SELECT lessonId, moduleId, title, content, published, updatedAt
+    FROM moduleLessons
+    WHERE lessonId = $1`,
+    [lessonId]
+  );
+  return result.rows[0] ?? null;
+}
+
 // shapes a lessonFiles row for api
 function describeFile(file){
   return {
@@ -280,6 +291,72 @@ router.post("/modules/:moduleId/lessons", async (req, res) => {
   if (!created) return res.status(404).json({ error: "Module not found." });
   if (created.error) return res.status(400).json({ error: created.error });
   res.status(201).json({ lesson: describeLesson(created, created.content) });
+});
+
+// edits a lesson. files removed from it are deleted from s3 after the save succeeds.
+router.put("/lessons/:lessonId", async (req, res) => {
+  const lessonId = toId(req.params.lessonId);
+  if (!lessonId) return res.status(404).json({ error: "Lesson not found." });
+  const { lesson, error } = validateLesson(req.body);
+  if (error) return res.status(400).json({ error });
+  const existing = await findLesson(lessonId);
+  if (!existing) return res.status(404).json({ error: "Lesson not found." });
+  if(!(await canManageModule(req.user, existing.moduleid))){
+    return res.status(403).json({ error: "Only this module's instructors can edit lessons." });
+  }
+
+  const saved = await inTransaction(async (client) =>{
+    const ids = fileIdsIn(lesson.content);
+    const usable = await client.query(
+      `SELECT fileID FROM lessonFiles
+      WHERE fileID = ANY($1) AND moduleID = $2 AND uploaded
+      AND (lessonId IS NULL OR lessonID = $3)
+      FOR UPDATE`,
+      [ids, existing.moduleid, lessonId],
+    );
+    if (usable.rowCount !== ids.length){
+      return { error: "One or more files can't be used. Upload them again" };
+    }
+
+    const updated = await client.query(
+      `UPDATE moduleLessons
+      SET title = $1, content = $2, published = $3, updatedAt = now()
+      WHERE lessonID = $4
+      RETURNING lessonID, title, content, published, updatedAt`,
+      [lesson.title, JSON.stringify(lesson.content), lesson.published, lessonId],
+    );
+    if (updated.rowCount === 0) return null;
+
+    await client.query(
+      "UPDATE lessonFiles SET lessonID = $1 WHERE fileID = ANY($2)",
+      [lessonId, ids],
+    );
+
+    const removed = await client.query(
+      `DELETE FROM lessonFiles
+      WHERE lessonID = $1 AND NOT (fileID = ANY($2))
+      RETURNING s3Key`,
+      [lessonId, ids],
+    );
+
+    return {
+      lesson: updated.rows[0],
+      removedKeys: removed.rows.map((file) => file.s3key),
+    };
+  });
+  
+  if (!saved) return res.status(404).json({ error: "Lesson not found." });
+  if (saved.error) return res.status(400).json({ error: saved.error });
+
+  for (const key of saved.removedKeys) {
+    try {
+      await storage.deleteFile(key);
+    } catch (err){
+      console.error(`Could not delete ${key} from S3:`, err);
+    }
+  }
+
+  res.json({ lesson: describeLesson(saved.lesson, saved.lesson.content) });
 });
 
 export default router;
