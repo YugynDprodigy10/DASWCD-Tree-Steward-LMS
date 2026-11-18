@@ -236,4 +236,50 @@ router.get("/modules/:moduleId/lessons", async (req, res) => {
   res.json({ lessons: result });
 });
 
+// creates a lesson in a module. its file blocks must be this module's uploaded, unused files
+router.post("/modules/:moduleId/lessons", async (req, res) => {
+  const moduleId = toId(req.params.moduleId);
+  if (!moduleId) return res.status(404).json({ error: "Module not found." });
+  const { lesson, error } = validateLesson(req.body);
+  if (error) return res.status(400).json({ error });
+  if (!(await canManageModule(req.user, moduleId))) {
+    return res.status(403).json({ error: "Only this module's instructors can add lessons." });
+  }
+
+  const created = await inTransaction(async (client) => {
+    const moduleRow = await client.query("SELECT 1 FROM modules WHERE moduleID = $1", [moduleId]);
+    if (moduleRow.rowCount === 0) return null;
+
+    const ids = fileIdsIn(lesson.content);
+    const usable = await client.query(
+      `SELECT fileID FROM lessonFiles
+       WHERE fileID = ANY($1) AND moduleID = $2 AND uploaded AND lessonID IS NULL
+       FOR UPDATE`,
+      [ids, moduleId],
+    );
+    if (usable.rowCount !== ids.length) {
+      return { error: "One or more files can't be used. Upload them again." };
+    }
+
+    const inserted = await client.query(
+      `INSERT INTO moduleLessons (moduleID, title, content, published, createdBy)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING lessonID, title, content, published, updatedAt`,
+      [moduleId, lesson.title, JSON.stringify(lesson.content), lesson.published, req.user.id],
+    );
+    const lessonRow = inserted.rows[0];
+
+    await client.query(
+      "UPDATE lessonFiles SET lessonID = $1 WHERE fileID = ANY($2)",
+      [lessonRow.lessonid, ids],
+    );
+
+    return lessonRow;
+  });
+
+  if (!created) return res.status(404).json({ error: "Module not found." });
+  if (created.error) return res.status(400).json({ error: created.error });
+  res.status(201).json({ lesson: describeLesson(created, created.content) });
+});
+
 export default router;
