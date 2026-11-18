@@ -7,7 +7,7 @@ router.use(requireUser);
 
 function toId(value) {
   const id = Number(value);
-  return Number.isInteger(id) && id > 0 ? id : null;
+  return Number.isSafeInteger(id) && id > 0 && id <= 2147483647 ? id : null;
 }
 
 function canViewAnalytics(user) {
@@ -59,20 +59,45 @@ router.get("/modules/:moduleId/summary", async (req, res) => {
 
   const result = await pool.query(
     `WITH page_totals AS (
-       SELECT pageKey, MAX(pageTitle) AS pageTitle,
-              SUM(durationSeconds)::bigint AS seconds,
+       SELECT mp.modulePageID,
+              CASE
+                WHEN mp.pageType = 'announcement' THEN mp.announcementTitle
+                WHEN mp.pageType = 'activity' THEN mp.activityTitle
+                ELSE 'Quiz: ' || mp.quizTitle
+              END AS pageTitle,
+              SUM(spv.durationSeconds)::bigint AS seconds,
               COUNT(*)::int AS visits,
-              COUNT(DISTINCT userID)::int AS students
-       FROM studentPageViews
-       WHERE moduleID = $1
-         AND (pageKey LIKE 'content:%' OR pageKey LIKE 'quiz:%')
-       GROUP BY pageKey
+              COUNT(DISTINCT spv.userID)::int AS students
+       FROM studentPageViews spv
+       JOIN modulePages mp
+         ON mp.moduleID = spv.moduleID
+        AND mp.modulePageID = CASE
+           WHEN spv.pageKey ~ '^content:[1-9][0-9]{0,9}$' THEN
+             CASE
+               WHEN substring(spv.pageKey FROM 9)::numeric <= 2147483647
+                 THEN substring(spv.pageKey FROM 9)::int
+             END
+           WHEN spv.pageKey ~ '^quiz:[1-9][0-9]{0,9}$' THEN
+             CASE
+               WHEN substring(spv.pageKey FROM 6)::numeric <= 2147483647
+                 THEN substring(spv.pageKey FROM 6)::int
+             END
+        END
+       WHERE spv.moduleID = $1
+         AND mp.published = TRUE
+         AND (
+           (spv.pageKey LIKE 'content:%'
+             AND mp.pageType IN ('announcement', 'activity'))
+           OR (spv.pageKey LIKE 'quiz:%' AND mp.pageType = 'quiz')
+         )
+       GROUP BY mp.modulePageID, mp.pageType,
+                mp.announcementTitle, mp.activityTitle, mp.quizTitle
      ),
      module_total AS (
        SELECT COALESCE(SUM(seconds), 0)::bigint AS seconds
        FROM page_totals
      )
-     SELECT page_totals.pageKey, page_totals.pageTitle,
+     SELECT page_totals.modulePageID, page_totals.pageTitle,
             page_totals.seconds, page_totals.visits, page_totals.students,
             module_total.seconds AS moduleSeconds
      FROM page_totals CROSS JOIN module_total
@@ -88,7 +113,7 @@ router.get("/modules/:moduleId/summary", async (req, res) => {
     pages: result.rows.map((row) => {
       const seconds = Number(row.seconds);
       return {
-        key: row.pagekey,
+        key: row.modulepageid,
         title: row.pagetitle,
         seconds,
         visits: row.visits,
@@ -109,11 +134,9 @@ router.post("/views", async (req, res) => {
   const moduleId = toId(req.body?.moduleId);
   const pageKey = typeof req.body?.pageKey === "string" ? req.body.pageKey : "";
   const durationSeconds = req.body?.durationSeconds;
-  const contentKey = /^content:[A-Za-z0-9:_-]{1,120}$/.test(pageKey);
-  const quizKey = /^quiz:([1-9]\d*)$/.exec(pageKey);
+  const contentKey = /^content:([1-9]\d{0,9})$/.exec(pageKey);
+  const quizKey = /^quiz:([1-9]\d{0,9})$/.exec(pageKey);
   const progressKey = pageKey === "navigation:my-progress";
-  const suppliedTitle =
-    typeof req.body?.title === "string" ? req.body.title.trim() : "";
 
   if (
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(visitId) ||
@@ -121,8 +144,13 @@ router.post("/views", async (req, res) => {
     !(contentKey || quizKey || progressKey) ||
     !Number.isInteger(durationSeconds) ||
     durationSeconds < 0 ||
-    durationSeconds > 86400 ||
-    (contentKey && (!suppliedTitle || suppliedTitle.length > 150))
+    durationSeconds > 86400
+  ) {
+    return res.status(400).json({ error: "Choose a valid student page view." });
+  }
+  if (
+    (contentKey && !toId(contentKey[1])) ||
+    (quizKey && !toId(quizKey[1]))
   ) {
     return res.status(400).json({ error: "Choose a valid student page view." });
   }
@@ -139,8 +167,24 @@ router.post("/views", async (req, res) => {
     return res.status(403).json({ error: "You are not enrolled in this module." });
   }
 
-  let title = progressKey ? "My progress" : suppliedTitle;
-  if (quizKey) {
+  let title = progressKey ? "My progress" : "";
+  if (contentKey) {
+    const content = await pool.query(
+      `SELECT CASE
+                WHEN pageType = 'announcement' THEN announcementTitle
+                WHEN pageType = 'activity' THEN activityTitle
+              END AS title
+       FROM modulePages
+       WHERE modulePageID = $1 AND moduleID = $2
+         AND pageType IN ('announcement', 'activity')
+         AND published = TRUE`,
+      [Number(contentKey[1]), moduleId],
+    );
+    if (!content.rows[0]?.title) {
+      return res.status(404).json({ error: "Module page not found." });
+    }
+    title = content.rows[0].title;
+  } else if (quizKey) {
     const quiz = await pool.query(
       `SELECT quizTitle
        FROM modulePages

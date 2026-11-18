@@ -31,24 +31,49 @@ async function ageVisit(visitId) {
   );
 }
 
+async function createPublishedContentPage(title, pageType) {
+  const result = await context.pool.query(
+    `INSERT INTO modulePages
+       (moduleID, modulePageOrder, modulePageTitle, pageType,
+        announcementTitle, announcementText, activityTitle, published)
+     SELECT $1, COALESCE(MAX(modulePageOrder), 0) + 1, $2, $3,
+            CASE WHEN $3 = 'announcement' THEN $2 END,
+            CASE WHEN $3 = 'announcement' THEN 'Test announcement' END,
+            CASE WHEN $3 = 'activity' THEN $2 END,
+            TRUE
+     FROM modulePages
+     WHERE moduleID = $1
+     RETURNING modulePageID`,
+    [context.moduleId, title, pageType],
+  );
+  return result.rows[0].modulepageid;
+}
+
 test("students can record cumulative module-page time, and analytics ranks the top five by share", async () => {
   const durations = [5, 10, 15, 20, 50, 100];
   const visitIds = [];
+  const pageIds = [];
   for (const [index, durationSeconds] of durations.entries()) {
     const visitId = crypto.randomUUID();
     visitIds.push(visitId);
+    const title = `Lesson ${index}`;
+    const pageId = await createPublishedContentPage(
+      title,
+      index % 2 ? "activity" : "announcement",
+    );
+    pageIds.push(pageId);
     const firstView = await recordView({
       visitId,
-      pageKey: `content:lesson-${index}`,
-      title: `Lesson ${index}`,
+      pageKey: `content:${pageId}`,
+      title: "Student-supplied fake title",
       durationSeconds: 0,
     });
     assert.equal(firstView.status, 200);
     await ageVisit(visitId);
     const response = await recordView({
       visitId,
-      pageKey: `content:lesson-${index}`,
-      title: `Lesson ${index}`,
+      pageKey: `content:${pageId}`,
+      title: "Another fake title",
       durationSeconds,
     });
     assert.equal(response.status, 200);
@@ -56,7 +81,7 @@ test("students can record cumulative module-page time, and analytics ranks the t
 
   assert.equal((await recordView({
     visitId: visitIds[0],
-    pageKey: "content:lesson-0",
+    pageKey: `content:${pageIds[0]}`,
     title: "Lesson 0",
     durationSeconds: 2,
   })).status, 200);
@@ -73,6 +98,12 @@ test("students can record cumulative module-page time, and analytics ranks the t
     pageKey: "navigation:my-progress",
     durationSeconds: 500,
   })).status, 200);
+  await context.pool.query(
+    `INSERT INTO studentPageViews
+       (visitID, userID, moduleID, pageKey, pageTitle, durationSeconds)
+     VALUES ($1, $2, $3, 'content:2147483647', 'Made up page', 900)`,
+    [crypto.randomUUID(), context.users.student, context.moduleId],
+  );
 
   const summary = await api(`/activity/modules/${context.moduleId}/summary`, {
     as: "teacher",
@@ -102,7 +133,7 @@ test("activity routes enforce student enrollment and teacher module scope", asyn
     body: {
       visitId: crypto.randomUUID(),
       moduleId: context.moduleId,
-      pageKey: "content:lesson",
+      pageKey: "content:2147483647",
       title: "Lesson",
       durationSeconds: 1,
     },
@@ -114,7 +145,7 @@ test("activity routes enforce student enrollment and teacher module scope", asyn
     body: {
       visitId: crypto.randomUUID(),
       moduleId: context.moduleId,
-      pageKey: "content:lesson",
+      pageKey: "content:2147483647",
       title: "Lesson",
       durationSeconds: 1,
     },
@@ -141,17 +172,31 @@ test("activity events validate page keys, duration, and visit identity", async (
     durationSeconds: -1,
   });
   assert.equal(invalid.status, 400);
+  const fakeContent = await recordView({
+    pageKey: "content:2147483647",
+    title: "Made up",
+    durationSeconds: 1,
+  });
+  assert.equal(fakeContent.status, 404);
 
   const visitId = crypto.randomUUID();
+  const pageId = await createPublishedContentPage(
+    "Lesson",
+    "activity",
+  );
+  const secondPageId = await createPublishedContentPage(
+    "Another lesson",
+    "announcement",
+  );
   assert.equal((await recordView({
     visitId,
-    pageKey: "content:lesson",
+    pageKey: `content:${pageId}`,
     title: "Lesson",
     durationSeconds: 1,
   })).status, 200);
   assert.equal((await recordView({
     visitId,
-    pageKey: "content:another-lesson",
+    pageKey: `content:${secondPageId}`,
     title: "Another lesson",
     durationSeconds: 2,
   })).status, 409);
@@ -159,15 +204,19 @@ test("activity events validate page keys, duration, and visit identity", async (
 
 test("reported time cannot exceed the elapsed lifetime of a page visit", async () => {
   const visitId = crypto.randomUUID();
+  const pageId = await createPublishedContentPage(
+    "Timed lesson",
+    "activity",
+  );
   assert.equal((await recordView({
     visitId,
-    pageKey: "content:timed-lesson",
+    pageKey: `content:${pageId}`,
     title: "Timed lesson",
     durationSeconds: 0,
   })).status, 200);
   assert.equal((await recordView({
     visitId,
-    pageKey: "content:timed-lesson",
+    pageKey: `content:${pageId}`,
     title: "Timed lesson",
     durationSeconds: 86400,
   })).status, 200);
