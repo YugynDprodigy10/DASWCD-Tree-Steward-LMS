@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createVisibleTimer } from "./visibleTimer.js";
+import { createVisibleTimer } from "../src/activity/visibleTimer.js";
 
 test("visible time pauses in the background and resumes on return", () => {
   const timer = createVisibleTimer(1000, true);

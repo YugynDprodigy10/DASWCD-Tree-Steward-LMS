@@ -888,6 +888,11 @@ const navItems = isInstructor
           )}
           {page === "My progress" && (
             <>
+              <p className="helper">
+                To help improve the course, Steward Tree records how long you
+                spend on module pages and quizzes while the tab is open. Course
+                staff see totals for the class, not your individual activity.
+              </p>
               <Gradebook user={user} role="student" />
               <section className="progress-panel">
                 <h2>
