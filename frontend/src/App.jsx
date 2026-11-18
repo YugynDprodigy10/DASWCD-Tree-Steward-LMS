@@ -18,6 +18,8 @@ import { useRoute } from "./navigation/useRoute.js";
 import { navigateRoute } from "./navigation/route.js";
 import Gradebook from "./gradebook/Gradebook.jsx";
 import { useAnnouncements } from "./announcements/useAnnouncements.js";
+import StudentAnalytics from "./activity/StudentAnalytics.jsx";
+import { useStudentActivity } from "./activity/useStudentActivity.js";
 
 function restoredDemoRole() {
   try {
@@ -254,6 +256,15 @@ function CourseApp({ auth0, testLoginEnabled }) {
     isInstructor,
     Boolean(role) && page === "Home" && !route.quizId,
   );
+  useStudentActivity({
+    user,
+    role,
+    preview,
+    moduleId,
+    page,
+    quizId: route.quizId,
+    detail,
+  });
   const moduleIndex = modules.findIndex((item) => item.id === moduleId);
   const currentModule = modules[moduleIndex] ?? modules[0];
   const previousModule = moduleIndex > 0 ? modules[moduleIndex - 1] : null;
@@ -490,6 +501,7 @@ const navItems = isInstructor
         ["Create", "+"],
         ["Students", "♧"],
         ["Gradebook", "▤"],
+        ["Analytics", "◔"],
       ]
     : [
         ["Home", "⌂"],
@@ -623,7 +635,9 @@ const navItems = isInstructor
                         ? "Students"
                         : page === "Gradebook"
                           ? "Course gradebook"
-                          : "Your learning progress"}
+                          : page === "Analytics"
+                            ? "Student engagement"
+                            : "Your learning progress"}
               </h1>
             </div>
             {page === "Home" && (
@@ -858,6 +872,7 @@ const navItems = isInstructor
           {page === "Gradebook" && (
             <Gradebook user={user} role="teacher" />
           )}
+          {page === "Analytics" && <StudentAnalytics user={user} />}
           {page === "Students" && (
             <section className="empty-state">
               <span aria-hidden="true">♧</span>

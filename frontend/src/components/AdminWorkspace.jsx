@@ -3,6 +3,7 @@ import Modal from "./Modal";
 import { PasswordSetup } from "./AccountRecovery";
 import { modules as initialModules } from "../data/course";
 import AdminModules from "./AdminModules";
+import StudentAnalytics from "../activity/StudentAnalytics.jsx";
 import { adminRequest } from "../admin/service";
 import "./AdminWorkspace.css";
 
@@ -355,6 +356,7 @@ export default function AdminWorkspace({ brand, user, onExit }) {
     People: "People & access",
     Modules: "Module management",
     Progress: "Student progress",
+    Analytics: "Student engagement",
   };
   return (
     <div className="app-shell admin-shell">
@@ -373,6 +375,7 @@ export default function AdminWorkspace({ brand, user, onExit }) {
             ["People", "♧"],
             ["Modules", "▤"],
             ["Progress", "◷"],
+            ["Analytics", "◔"],
           ].map(([name, icon]) => (
             <button
               key={name}
@@ -787,6 +790,7 @@ export default function AdminWorkspace({ brand, user, onExit }) {
               ))}
             </section>
           )}
+          {page === "Analytics" && <StudentAnalytics user={user} />}
           <footer className="workspace-footer">
             <span>Steward Tree · Rooted in community.</span>
             <span>Single-class administrator prototype</span>
