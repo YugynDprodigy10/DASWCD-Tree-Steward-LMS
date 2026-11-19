@@ -62,7 +62,11 @@ async function toLessonBlocks(user, moduleId, values, file, onProgress) {
   const blocks = [];
   for (const item of values.content){
     if (item.type === "text"){
-      blocks.push({ type: "text", html: sanitizeLessonHtml(item.html) });
+      const html = sanitizeLessonHtml(item.html);
+      // skip text boxes with no words
+      const text = html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, "").trim();
+      if (!text) continue;
+      blocks.push({ type: "text", html });
     } else if (item.type === "pdf") {
       let fileId;
       if (item.file) {
