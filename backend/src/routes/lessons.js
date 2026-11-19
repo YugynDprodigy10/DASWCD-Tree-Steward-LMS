@@ -12,7 +12,7 @@ import { inTransaction } from "../db/transaction.js";
 // files go from browser directly to private s3 using presigned POST forms. students view them through short-lived signed links
 
 const router = Router();
-// must match the contentType check in 006_module_lessons.sql
+// must match the contentType check in 009_module_lessons.sql
 const ALLOWED_TYPES = ["application/pdf", "video/mp4", "video/webm"];
 
 // size limits for a saved lesson. database doesn't enforce these so this is the only place to check
