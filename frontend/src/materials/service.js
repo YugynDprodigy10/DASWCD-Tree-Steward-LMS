@@ -1,5 +1,5 @@
-import { apiRequest, requestHeaders, responseError } from "../api/client.js";
-import { storedLessonContent } from "./content.js";
+import { apiRequest } from "../api/client.js";
+import { lessonSummary, sanitizeLessonHtml, storedLessonContent } from "./content.js";
 
 export const materialsApiEnabled =
   import.meta.env?.VITE_MATERIALS_API_ENABLED === "true";
@@ -19,6 +19,69 @@ export function pdfError(file) {
   if (!file || file.type !== "application/pdf" || file.size <= 0 || file.size > MAX_FILE_BYTES)
     return "Choose a nonempty PDF file up to 100 MB.";
   return "";
+}
+
+// uploads one file for a module and returns its fileId
+async function uploadFile(user, moduleId, file, onProgress){
+  const form = await apiRequest(user,`/modules/${moduleId}/files/upload`, "POST", {
+    fileName: file.name,
+    contentType: file.type,
+    sizeBytes: file.size,
+  });
+
+  await new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("POST", form.url);
+    request.upload.onprogress = (event) => onProgress(
+      event.lengthComputable
+        ? Math.round((event.loaded / event.total) * 100)
+        : null,
+    );
+    request.onerror = () => reject(new Error("Upload failed. Check your connection and try again."));
+    request.onload = () => {
+      if (request.status >= 200 && request.status < 300){
+        resolve();
+      } else {
+        reject(new Error ("The file could not be uploaded. Please try again."));
+      }
+    };
+    const body = new FormData();
+    for (const [name, value] of Object.entries(form.fields)){
+      body.append(name, value);
+    }
+    body.append("file", file);
+    request.send(body);
+  });
+  await apiRequest(user, `/files/${form.fileId}/complete`, "POST");
+  return form.fileId;
+}
+
+// turns the editor's content into the blocks the lessons API stores
+// new files are uploaded to s3 first, files already in the lesson keep their fileId
+async function toLessonBlocks(user, moduleId, values, file, onProgress) {
+  const blocks = [];
+  for (const item of values.content){
+    if (item.type === "text"){
+      blocks.push({ type: "text", html: sanitizeLessonHtml(item.html) });
+    } else if (item.type === "pdf") {
+      let fileId;
+      if (item.file) {
+        fileId = await uploadFile(user, moduleId, item.file, onProgress);
+      } else {
+        fileId = item.fileId;
+      }
+      blocks.push({ type: "pdf", fileId });
+    } else if (item.type === "video") {
+      let fileId;
+      if (file){
+        fileId = await uploadFile(user, moduleId, file, onProgress);
+      } else {
+        fileId = item.fileId;
+      }
+      blocks.push({ type: "video", fileId, transcript: values.transacript });
+    }
+  }
+  return blocks;
 }
 
 function withStore(mode, action) {
@@ -46,10 +109,28 @@ function withStore(mode, action) {
   });
 }
 
+// reshapes a lesson from api into the material shape the module page and editor use
+function fromLesson(lesson, moduleId){
+  const content = lesson.content.map((block) => ({
+    ...block,
+    id: crypto.randomUUID(),
+    name: block.fileName,
+  }));
+  return{
+    id: lesson.lessonId, moduleId,
+    type: "Learning material",
+    title: lesson.title,
+    published: lesson.published,
+    description: lessonSummary(content),
+    transcript: content.find((block) => block.type === "video")?.transcript || "", content,
+  };
+}
+
 export async function listMaterials(user, moduleId) {
   if (user) {
     if (!materialsApiEnabled) return [];
-    return (await apiRequest(user, `/modules/${moduleId}/materials`)).materials;
+    const result = await apiRequest(user, `/modules/${moduleId}/lessons`);
+    return result.lessons.map((lesson) => fromLesson(lesson, moduleId));
   }
   const materials = await withStore("readonly", (store) => store.getAll());
   return materials
@@ -110,57 +191,16 @@ export async function saveMaterial(user, moduleId, values, file, onProgress) {
   return material;
 }
 
-// Proposed backend contract: one multipart request saves the file and metadata.
-// Keep disabled until the backend implements authorization and durable storage.
+// saves a signed in instructor's lesson through the lessons api
+// uploads any new files first, then creates the lesson (no id yet) or updates it
 async function uploadMaterial(user, moduleId, values, file, onProgress) {
-    const headers = await requestHeaders(user);
-    return new Promise((resolve, reject) => {
-    const request = new XMLHttpRequest();
-    const path = values.id
-      ? `/materials/${encodeURIComponent(values.id)}`
-      : `/modules/${moduleId}/materials`;
-    request.open(values.id ? "PATCH" : "POST", `/api${path}`);
-    for (const [name, value] of Object.entries(headers))
-      request.setRequestHeader(name, value);
-    request.timeout = 120000;
-    request.upload.onprogress = (event) =>
-      onProgress(
-        event.lengthComputable
-          ? Math.round((event.loaded / event.total) * 100)
-          : null,
-      );
-    request.onerror = () =>
-      reject(new Error("Upload failed. Check your connection and try again."));
-    request.ontimeout = () =>
-      reject(new Error("Upload timed out. Check the module before retrying."));
-    request.onload = () => {
-      let result;
-      try {
-        result = JSON.parse(request.responseText);
-      } catch {
-        /* Handled below. */
-      }
-      if (request.status < 200 || request.status >= 300 || !result?.material) {
-        reject(
-          responseError(
-            request.status,
-            result?.error ||
-              "Upload service unavailable. Your file has not been confirmed as saved.",
-          ),
-        );
-      } else resolve(result.material);
-    };
-    const body = new FormData();
-    body.append(
-      "metadata",
-      JSON.stringify({
-        title: values.title,
-        description: values.description,
-        transcript: values.transcript,
-        published: values.published,
-      }),
-    );
-    if (file) body.append("file", file);
-    request.send(body);
-  });
+  const content = await toLessonBlocks(user, moduleId, values, file, onProgress);
+  const lesson = { title: values.title, published: values.published, content };
+  let result;
+  if (values.id) {
+    result = await apiRequest(user, `/lessons/${values.id}`, "PUT", lesson);
+  } else {
+    result = await apiRequest(user, `/modules/${moduleId}/lessons`, "POST", lesson);
+  }
+  return result.lesson;
 }
