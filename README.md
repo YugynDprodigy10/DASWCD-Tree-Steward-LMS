@@ -59,6 +59,9 @@ Sign in with the **Test student**, **Test instructor**, or **Test administrator*
 
 This runs every automated check in Docker, exactly as GitHub Actions does on each pull request: migrations and all API tests against a fresh, throwaway database, then frontend lint, tests, and a production build.
 
+## Student activity analytics
+
+Signed-in students' visits to **My progress**, opened module content, and quizzes are recorded. The module Home screen is excluded. Time is counted only while the browser tab is visible, and pauses when it is hidden. Teachers can view analytics for their assigned modules; administrators can view all modules. Each module's analytics shows its five content pages with the highest share of that module's tracked content time. Navigation-only time is recorded but not included in content-page percentages.
 
 ## Running without Docker
 
@@ -228,6 +231,8 @@ Repository admins should follow [GitHub setup](docs/github-setup.md) to enable b
 Google Forms links have been replaced with a native multiple-choice builder. As the test instructor, open Create → Quiz or use the Quizzes section in a module. Create a draft, add questions with 2–6 choices and exactly one correct answer, assign 1–100 points, and publish. Published questions are read-only until unpublished; the API rejects question changes after submissions.
 
 Student quiz titles open a separate tab/window (browser preferences decide which). Radio-button groups support keyboard navigation, unanswered questions block submission, and successful submissions show the score. Instructor previews never submit attempts. Quiz windows expire after two hours; signing out invalidates their launch context.
+
+Each quiz allows one attempt unless its instructor turns on retakes, up to 10 attempts in total. The API enforces the limit, including when a student submits twice at once, and keeps every score already recorded if the limit is lowered.
 
 Demo quizzes use browser-local storage and local practice scoring; they are cleared on sign-out. They are not official grades. Signed-in accounts use the quiz API without falling back to sample data. Run the backend and migrations before using signed-in quiz flows. The API validates Auth0 access tokens and derives each request's identity and roles from the database; it does not trust a user ID supplied by the browser. The API decides module permissions; live accounts are not hardcoded to Week 2 for quiz operations.
 

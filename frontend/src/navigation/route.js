@@ -4,6 +4,7 @@ export const pages = [
   "Quizzes",
   "Students",
   "Gradebook",
+  "Analytics",
   "My progress",
 ];
 

@@ -18,7 +18,7 @@ const MAX_CHOICES = 6;
 
 async function findQuiz(quizId, db = pool) {
   const result = await db.query(
-    `SELECT modulePageID, moduleID, modulePageOrder, quizTitle, published
+    `SELECT modulePageID, moduleID, modulePageOrder, quizTitle, published, maxAttempts
      FROM modulePages
      WHERE modulePageID = $1 AND pageType = 'quiz'`,
     [quizId],
@@ -67,10 +67,24 @@ function describeQuiz(quiz, questions) {
     title: quiz.quiztitle,
     published: quiz.published,
     order: quiz.modulepageorder,
+    maxAttempts: quiz.maxattempts,
+    // Tells the builder that this API saves and enforces attempt limits.
+    capabilities: { retakePolicy: true },
     totalPoints: questions.reduce((sum, question) => sum + question.points, 0),
     questions,
   };
 }
+
+
+const MAX_ATTEMPTS_LIMIT = 10;
+
+// An attempt limit counts every attempt, including the first: 1 means no retakes.
+function validMaxAttempts(value) {
+  return Number.isInteger(value) && value >= 1 && value <= MAX_ATTEMPTS_LIMIT
+    ? value
+    : null;
+}
+
 
 function validTitle(value) {
   const title = typeof value === "string" ? value.trim() : "";
@@ -144,7 +158,7 @@ router.get("/modules/:moduleId/quizzes", async (req, res) => {
   }
 
   const result = await pool.query(
-    `SELECT p.modulePageID, p.modulePageOrder, p.quizTitle, p.published,
+    `SELECT p.modulePageID, p.modulePageOrder, p.quizTitle, p.published, p.maxAttempts,
             COUNT(q.questionID)::int AS questionCount,
             COALESCE(SUM(q.points), 0)::int AS totalPoints
      FROM modulePages p
@@ -160,6 +174,7 @@ router.get("/modules/:moduleId/quizzes", async (req, res) => {
       title: row.quiztitle,
       published: row.published,
       order: row.modulepageorder,
+      maxAttempts: row.maxattempts,
       questionCount: row.questioncount,
       totalPoints: row.totalpoints,
     })),
@@ -175,14 +190,14 @@ router.post("/modules/:moduleId/quizzes", async (req, res) => {
     return res.status(403).json({ error: "Only this module's instructors can add quizzes." });
   }
 
-  const quiz = await inTransaction(async (client) => {
+    const quiz = await inTransaction(async (client) => {
     const moduleRow = await client.query("SELECT 1 FROM modules WHERE moduleID = $1 FOR UPDATE", [moduleId]);
     if (moduleRow.rowCount === 0) return null;
     const result = await client.query(
       `INSERT INTO modulePages (moduleID, modulePageOrder, modulePageTitle, pageType, quizTitle, published)
        SELECT $1, COALESCE(MAX(modulePageOrder), 0) + 1, $2, 'quiz', $2, FALSE
        FROM modulePages WHERE moduleID = $1
-       RETURNING modulePageID, moduleID, modulePageOrder, quizTitle, published`,
+       RETURNING modulePageID, moduleID, modulePageOrder, quizTitle, published, maxAttempts`,
       [moduleId, title],
     );
     return result.rows[0];
@@ -209,12 +224,28 @@ router.get("/quizzes/:quizId", async (req, res) => {
 router.patch("/quizzes/:quizId", async (req, res) => {
   const quiz = await quizForManager(req, res);
   if (!quiz) return;
-  const title = validTitle(req.body?.title);
+  const body = req.body ?? {};
+  const changingTitle = body.title !== undefined;
+  const changingAttempts = body.maxAttempts !== undefined;
+  if (!changingTitle && !changingAttempts) {
+    return res.status(400).json({ error: "Send a new title or attempt limit." });
+  }
+  const title = changingTitle ? validTitle(body.title) : quiz.quiztitle;
   if (!title) return res.status(400).json({ error: "Enter a quiz title (up to 150 characters)." });
+  const maxAttempts = changingAttempts ? validMaxAttempts(body.maxAttempts) : quiz.maxattempts;
+  if (!maxAttempts) {
+    return res.status(400).json({
+      error: `Choose 1–${MAX_ATTEMPTS_LIMIT} total attempts, including the first attempt.`,
+    });
+  }
 
+  // Lowering the limit keeps every score already recorded; students who have
+  // used up the new limit just can't start another attempt.
   await pool.query(
-    "UPDATE modulePages SET quizTitle = $2, modulePageTitle = $2 WHERE modulePageID = $1",
-    [quiz.modulepageid, title],
+    `UPDATE modulePages
+     SET quizTitle = $2, modulePageTitle = $2, maxAttempts = $3
+     WHERE modulePageID = $1`,
+    [quiz.modulepageid, title, maxAttempts],
   );
   const updated = await findQuiz(quiz.modulepageid);
   res.json({ quiz: describeQuiz(updated, await loadQuestions(quiz.modulepageid, true)) });
@@ -371,6 +402,17 @@ router.post("/quizzes/:quizId/attempts", async (req, res) => {
   }
 
   const attempt = await inTransaction(async (client) => {
+    // Serialize this student's submissions for this quiz, so two submits at
+    // the same moment can't both slip under the limit.
+    await client.query("SELECT pg_advisory_xact_lock($1, $2)", [quizId, req.user.id]);
+    const taken = await client.query(
+      `SELECT COUNT(*)::int AS count
+       FROM quizAttempts
+       WHERE modulePageID = $1 AND userID = $2 AND submittedAt IS NOT NULL`,
+      [quizId, req.user.id],
+    );
+
+    if (taken.rows[0].count >= quiz.maxattempts) return null;
     const inserted = await client.query(
       `INSERT INTO quizAttempts (modulePageID, userID, startedAt, submittedAt, score, maxScore)
        VALUES ($1, $2, NOW(), NOW(), $3, $4)
@@ -387,6 +429,14 @@ router.post("/quizzes/:quizId/attempts", async (req, res) => {
     }
     return inserted.rows[0];
   });
+
+  if (!attempt) {
+    return res.status(409).json({
+      error: quiz.maxattempts === 1
+        ? "You've already taken this quiz."
+        : `You've used all ${quiz.maxattempts} attempts for this quiz.`,
+    });
+  }
 
   res.status(201).json({
     attempt: { id: attempt.attemptid, submittedAt: attempt.submittedat, score, maxScore, results },
