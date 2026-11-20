@@ -5,6 +5,7 @@ import { test, before, after, mock } from "node:test";
 import assert from "node:assert/strict";
 import { createAuthTestContext } from "../test-support/authTestContext.js";
 import { storage, MAX_FILE_BYTES } from "../src/storage/s3.js";
+import { deleteAbandonedFiles } from "../src/storage/cleanupFiles.js";
 
 const context = createAuthTestContext("lessontest");
 const { api, pool, users } = context;
@@ -226,6 +227,27 @@ test("lesson text is cleaned on the server, keeping only the allowed formatting 
   assert.equal(created.status, 201);
   const stored = await pool.query("SELECT content FROM moduleLessons WHERE lessonID = $1", [created.body.lesson.lessonId]);
   assert.deepEqual(stored.rows[0].content, [{ type: "text", html: '<p>Hi</p><h2>Heading</h2>' }]);
+});
+
+test("cleanup removes day-old unattached uploads and leaves recent and saved files alone", async () => {
+  const old = await uploadFile(); // uploaded but never saved into a lesson
+  const recent = await uploadFile(); // also unattached, but uploaded just now
+  const saved = await uploadFile(); // saved into a lesson below, so never cleaned
+
+  const lesson = await createLesson({
+    title: "Keeps its file",
+    content: [{ type: "pdf", fileId: saved.fileId }]
+  });
+  assert.equal(lesson.status, 201);
+
+  await pool.query("UPDATE lessonFiles SET createdAt = now() - interval '2 days' WHERE fileID = $1", [old.fileId]);
+  await deleteAbandonedFiles();
+
+  assert.equal(await fileRow(old.fileId), null);
+  assert.ok(deletedKeys.includes(old.key));
+
+  assert.ok(await fileRow(recent.fileId));
+  assert.ok(await fileRow(saved.fileId));
 });
 
 test("editing keeps the lesson's files, claims new ones, and deletes removed ones from S3", async () => {
