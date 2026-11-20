@@ -5,6 +5,7 @@ import { toId, canManageModule, isEnrolled, canViewModule } from "../auth/module
 import { randomUUID } from "node:crypto";
 import { storage, MAX_FILE_BYTES } from "../storage/s3.js";
 import { inTransaction } from "../db/transaction.js";
+import sanitizeHtml from "sanitize-html";
 
 // lessons are ordered text, pdf and video blocks
 // teachers assigned to the module, and admins, create and edit lessons and upload files
@@ -19,6 +20,16 @@ const ALLOWED_TYPES = ["application/pdf", "video/mp4", "video/webm"];
 const MAX_BLOCKS = 50; // blocks per lesson
 const MAX_HTML = 50000; // characters per text block
 const MAX_TRANSCRIPT = 20000; // characters per video transcript
+
+const LESSON_TAGS = ["p", "br", "h2", "h3", "strong", "b", "em", "i", "u", "ul", "ol", "li"];
+
+// removes every tag and attribute not on the list
+function cleanLessonHtml(html){
+  return sanitizeHtml(html, {
+    allowedTags: LESSON_TAGS,
+    allowedAttributes: {},
+  });
+}
 
 // checks a lesson sent by the editor. returns { lesson } or { error }
 function validateLesson(body){
@@ -37,7 +48,7 @@ function validateLesson(body){
     if (block?.type === "text"){
       const html = typeof block.html === "string" ? block.html : "";
       if (html.length > MAX_HTML) return { error: "A text block is too long." };
-      cleaned.push({ type: "text", html });
+      cleaned.push({ type: "text", html: cleanLessonHtml(html) });
     } else if (block?.type === "pdf" || block?.type === "video"){
       const fileId = toId(block.fileId);
       if (!fileId) return { error: "Every PDF or video block needs a file." };

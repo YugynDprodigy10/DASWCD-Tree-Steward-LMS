@@ -218,6 +218,16 @@ test("only checked fields are stored, so stray data like old links never reaches
   assert.deepEqual(stored.rows[0].content, [{ type: "pdf", fileId: file.fileId }]);
 });
 
+test("lesson text is cleaned on the server, keeping only the allowed formatting tags", async () => {
+  const created = await createLesson({
+    title: "nasty input",
+    content: [{ type: "text", html: '<p onclick="steal()">Hi<script>alert(1)</script></p><img src=x onerror="steal()"><h2>Heading</h2>'}],
+  });
+  assert.equal(created.status, 201);
+  const stored = await pool.query("SELECT content FROM moduleLessons WHERE lessonID = $1", [created.body.lesson.lessonId]);
+  assert.deepEqual(stored.rows[0].content, [{ type: "text", html: '<p>Hi</p><h2>Heading</h2>' }]);
+});
+
 test("editing keeps the lesson's files, claims new ones, and deletes removed ones from S3", async () => {
   const kept = await uploadFile();
   const removed = await uploadFile();
